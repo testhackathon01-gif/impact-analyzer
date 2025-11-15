@@ -1,5 +1,6 @@
 package com.citi.intelli.diff.analyzer;
 
+import com.citi.intelli.diff.api.model.ImpactReport;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;

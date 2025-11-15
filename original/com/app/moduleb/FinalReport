@@ -1,0 +1,11 @@
+package com.app.moduleb;
+
+import com.app.modulea.A_Helper;
+
+public class FinalReporter {
+    public void runReport() {
+        A_Helper h = new A_Helper();
+        String ts = h.getTimestamp();
+        System.out.println(ts);
+    }
+}

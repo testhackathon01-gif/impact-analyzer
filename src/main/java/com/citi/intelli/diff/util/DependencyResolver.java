@@ -1,4 +1,4 @@
-package com.citi.intelli.diff.analyzer;
+package com.citi.intelli.diff.util;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
@@ -17,43 +17,41 @@ public class DependencyResolver {
     }
 
     /**
-     * STUB: Finds ALL callers of the target method across the entire codebase.
-     * This logic is now fixed to dynamically search for the exact method name.
+     * STUB: Finds ALL callers of the target method across the entire codebase (Intra-module and Inter-module).
      */
     public Map<String, List<MethodDeclaration>> findAllCallersOfMethod(
             String targetFQN,
-            String targetMethodSignature, // This will be "generateData" or "otherMethod"
+            String targetMethodSignature,
             Map<String, String> allModuleCodes
     ) {
-        System.out.println("Resolver Stub: Searching for callers of " + targetMethodSignature + "...");
+        System.out.println("Resolver Stub: Searching for callers of " + targetFQN + "." + targetMethodSignature + "...");
         Map<String, List<MethodDeclaration>> callers = new java.util.HashMap<>();
 
-        // 🎯 FIX: Dynamically create the search string based on the target method name.
-        // It looks for a call like "a.generateData()" or "a.otherMethod()".
-        String searchCallPattern = "a." + targetMethodSignature + "(";
+        // Dynamically create the search string based on the target method name (e.g., "h.getTimestamp(")
+        String searchCallPattern = targetMethodSignature + "(";
 
-        // Iterate through ALL modules (C, D, E, etc.)
+        // Iterate through ALL modules/files in the project
         for (Map.Entry<String, String> entry : allModuleCodes.entrySet()) {
             String fqn = entry.getKey();
             String code = entry.getValue();
 
-            // Ignore the module that was changed (Module A)
+            // Ignore the source file that was changed (A_Helper)
             if (fqn.equals(targetFQN)) {
                 continue;
             }
 
             try {
-                // Parse the Compilation Unit of the potential calling module
+                // Parse the Compilation Unit of the potential calling module/class
                 CompilationUnit cu = StaticJavaParser.parse(code);
 
-                // FIXED LOGIC: Use the dynamically created search pattern
+                // STUB LOGIC: Check for any method that contains the call pattern.
                 List<MethodDeclaration> callingMethods = cu.findAll(MethodDeclaration.class)
                         .stream()
                         .filter(m -> m.toString().contains(searchCallPattern))
                         .toList();
 
                 if (!callingMethods.isEmpty()) {
-                    System.out.println("-> DISCOVERED IMPACT in module: " + fqn + " (" + callingMethods.size() + " method(s))");
+                    System.out.println("-> DISCOVERED IMPACT in file: " + fqn + " (" + callingMethods.size() + " method(s))");
                     callers.put(fqn, callingMethods);
                 }
 
@@ -62,7 +60,7 @@ public class DependencyResolver {
             }
         }
 
-        System.out.println("Resolver Stub: Found " + callers.size() + " impacted module(s).");
+        System.out.println("Resolver Stub: Found " + callers.size() + " impacted module/file(s).");
         return callers;
     }
 }

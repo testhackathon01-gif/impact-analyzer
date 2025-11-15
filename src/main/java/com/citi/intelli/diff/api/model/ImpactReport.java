@@ -1,5 +1,5 @@
 
-package com.citi.intelli.diff.analyzer;
+package com.citi.intelli.diff.api.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
