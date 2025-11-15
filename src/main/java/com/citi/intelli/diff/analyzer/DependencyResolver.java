@@ -1,12 +1,15 @@
-package com.citi.intelli.diff.util;
+package com.citi.intelli.diff.analyzer;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import org.springframework.stereotype.Component;
+
 import java.util.List;
 import java.util.Map;
 
 // Simulates the class that uses the JavaParser Symbol Solver
+@Component
 public class DependencyResolver {
 
     private final List<String> sourcePaths;

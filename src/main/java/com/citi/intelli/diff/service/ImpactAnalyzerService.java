@@ -18,4 +18,8 @@ public interface ImpactAnalyzerService {
             String localFilePath,
             String targetFilename
     ) throws Exception;
+
+     List<String> getAvailableRepositories();
+
+     String getClassCode(String repoIdentifier, String filename);
 }

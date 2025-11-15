@@ -44,6 +44,7 @@ dependencies {
     // --- Git Operations (JGit) ---
     // The library for interacting with Git repositories
     //implementation 'org.eclipse.jgit:org.eclipse.jgit:6.8.0.202311291807-r'
+    implementation 'org.eclipse.jgit:org.eclipse.jgit:6.10.0.202406032230-r'
 
     // --- Code Parsing (JavaParser) ---
     // Core library for parsing Java source files into Abstract Syntax Trees (AST)
