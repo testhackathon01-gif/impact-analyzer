@@ -26,7 +26,7 @@ public class GitRepoLister {
     private final HttpClient http;
 
     // 1. Token injected from application.properties
-    @Value("${github.token}")
+    @Value("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")
     private String token;
 
     private final ObjectMapper mapper = new ObjectMapper();

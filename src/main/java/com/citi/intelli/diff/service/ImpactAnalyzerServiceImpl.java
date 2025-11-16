@@ -12,10 +12,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static com.citi.intelli.diff.util.ImpactAnalyzerUtil.getImpactAnalysisReport;
-
 @Service
 public class ImpactAnalyzerServiceImpl implements ImpactAnalyzerService{
+
+    @Autowired
+    ImpactAnalyzerUtil impactAnalyzerUtil;
 
     @Autowired
     GitRepoLister gitRepoLister;
@@ -27,14 +28,17 @@ public class ImpactAnalyzerServiceImpl implements ImpactAnalyzerService{
     public List<AggregatedChangeReport> runAnalysis(String selectedRepo, List<String> compareRepositoryUrls, String localFilePath, String targetFilename) throws Exception {
 
         Map<String,Map<String,String>> localRepoCache= temporaryCacheGitFetcher.getRepoMetaData();
-
+        compareRepositoryUrls.add(selectedRepo);
         System.out.println("repos:--"+localRepoCache);
         System.out.println("selectedRepo:--"+selectedRepo);
         System.out.println("compareRepositoryUrls:--"+compareRepositoryUrls);
 
         List<String> allFiles= getSubMapKeysForSelectedRepos(localRepoCache,compareRepositoryUrls);
 
+        Map<String, String> allFilesWithMetaDataMap=getSubMapsForRepos(localRepoCache,compareRepositoryUrls);
+
         System.out.println(allFiles);
+        System.out.println(allFilesWithMetaDataMap);
 
 
         /*List<String> totalFileList=new ArrayList<>();
@@ -45,9 +49,25 @@ public class ImpactAnalyzerServiceImpl implements ImpactAnalyzerService{
         totalFileList.add("com.app.moduled.Service");*/
 
         // 4. EXECUTE ANALYSIS LOOP
-        List<AggregatedChangeReport> masterReportList =getImpactAnalysisReport(allFiles,selectedRepo,localFilePath,targetFilename);
+        List<AggregatedChangeReport> masterReportList = impactAnalyzerUtil.getImpactAnalysisReport(allFiles,allFilesWithMetaDataMap,localFilePath,targetFilename);
 
         return masterReportList;
+    }
+
+    public Map<String, String> getSubMapsForRepos(
+            Map<String, Map<String, String>> localRepoCache,
+            List<String> repoNames) {
+        // The result map to store the requested sub-maps
+        Map<String, String> resultMaps = new HashMap<>();
+
+        // 1. Iterate through the list of repository names provided by the user
+        for (String repoName : repoNames) {
+            // 2. Retrieve the sub-map using the current repository name
+            Map<String, String> subMap = localRepoCache.get(repoName);
+            resultMaps.putAll(subMap);
+        }
+
+        return resultMaps;
     }
 
 

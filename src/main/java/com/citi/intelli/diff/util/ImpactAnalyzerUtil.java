@@ -24,7 +24,7 @@ public class ImpactAnalyzerUtil {
     final static String FILE_SPLIT_MARKER = "\n// --- FILE SPLIT --- \n";
 
     @Autowired
-    static TemporaryCacheGitFetcher temporaryCacheGitFetcher;
+    TemporaryCacheGitFetcher temporaryCacheGitFetcher;
 
     //public static final String ORIGINAL_FOLDER_PATH = "C:\\Users\\DELL\\Downloads\\impact-analyzer\\original\\";
     //public static final String MODIFIED_FOLDER_PATH = "C:\\Users\\DELL\\Downloads\\impact-analyzer\\modified\\";
@@ -55,7 +55,7 @@ public class ImpactAnalyzerUtil {
     }
 
     public static String getSubMapValue(Map<String,Map<String,String>> localRepoCache,String repoKey,
-                                 String fileKey) {
+                                        String fileKey) {
         // 1. Get the inner map using the repository key
         Map<String, String> innerMap = localRepoCache.get(repoKey);
         // Check if the repository key exists
@@ -128,15 +128,29 @@ public class ImpactAnalyzerUtil {
         return masterReportList;
     }
 
-    public static List<AggregatedChangeReport> getImpactAnalysisReport(List<String> totalFileList,String selectedRepo,String localPath, String fileName) throws Exception {
+    public  List<AggregatedChangeReport> getImpactAnalysisReport(List<String> totalFileList,Map<String, String> allFilesWithMetaDataMap,String localPath, String fileName) throws Exception {
 
-        Map<String, Map<String, String>> data = ImpactAnalyzerUtil.loadDynamicCodeMaps(totalFileList,selectedRepo,localPath, fileName);
+        Map<String, Map<String, String>> data = loadDynamicCodeMaps(totalFileList,allFilesWithMetaDataMap,localPath, fileName);
         // Call helper method directly
         Map<String, String> originalDependentCodes = data.get("original");
         Map<String, String> modifiedDependentCodes = data.get("modified");
+        String fileNameWithPackage = null;
+        for (String fqn : totalFileList) {
+            // Convert FQN to a relative file path (e.g., com.app.modulea.A_Helper -> com/app/modulea/A_Helper.java)
+            String relativeFilePath = fqn.replace('.', File.separatorChar) + ".java";
+            try {
+                if(relativeFilePath.contains(fileName)){
+                    fileNameWithPackage=fqn;
+                }
+            } catch (Exception e) {
+                // Handle files that might not exist in one version (e.g., deleted or added)
+                System.err.println("Warning: Could not load code for FQN " + fqn + ". " + e.getMessage());
+                // In a real system, you'd decide how to handle missing files (e.g., put null)
+            }
+        }
 
         // 3. DYNAMIC DIFF & METADATA EXTRACTION
-        Map<String, List<String>> allModuleADiffs = generateDiffs(originalDependentCodes, modifiedDependentCodes, "com.app.modulea.A_Helper"); // Call helper method directly
+        Map<String, List<String>> allModuleADiffs = generateDiffs(originalDependentCodes, modifiedDependentCodes, fileNameWithPackage); // Call helper method directly
         System.out.println("--- Found structural changes in " + allModuleADiffs.size() + " file(s) within Module A ---");
 
         // 4. EXECUTE ANALYSIS LOOP
@@ -168,12 +182,13 @@ public class ImpactAnalyzerUtil {
     */
     }
 
-    public static Map<String, Map<String, String>> loadDynamicCodeMaps(List<String> data, String localPath, String changedRepo, String fileName) {
+    public Map<String, Map<String, String>> loadDynamicCodeMaps(List<String> data, Map<String, String> allFilesWithMetaDataMap, String localPath, String fileName) {
 
         // 1. Create the two maps to hold the final FQN -> Code content
         Map<String, String> originalDependentCodes = new HashMap<>();
         Map<String, String> modifiedDependentCodes = new HashMap<>();
 
+        data= removeDuplicatesUsingSet(data);
         // 2. Iterate over every FQN defined in the TestData
         for (String fqn : data) {
 
@@ -181,16 +196,17 @@ public class ImpactAnalyzerUtil {
             String relativeFilePath = fqn.replace('.', File.separatorChar) + ".java";
 
             try {
-                // A. Load Original (Baseline) Code
-                //String originalPath = ORIGINAL_FOLDER_PATH + File.separator + relativeFilePath;
-                //String originalContent = readFileContent(originalPath);
-                String originalContent= ImpactAnalyzerUtil.getSubMapValue(temporaryCacheGitFetcher.getRepoMetaData(),changedRepo,fileName);
-                originalDependentCodes.put(fqn, originalContent);
-
-                // B. Load Modified (Target) Code
-                String modifiedPath = localPath + File.separator + relativeFilePath;
-                String modifiedContent = readFileContent(modifiedPath);
-                modifiedDependentCodes.put(fqn, modifiedContent);
+                String originalContent= allFilesWithMetaDataMap.get(fqn);
+                if(relativeFilePath.contains(fileName)){
+                    fileName= fqn;
+                    String modifiedPath = localPath + File.separator + relativeFilePath;
+                    String modifiedContent = readFileContent(modifiedPath);
+                    originalDependentCodes.put(fqn, originalContent);
+                    modifiedDependentCodes.put(fqn, modifiedContent);
+                }else{
+                    originalDependentCodes.put(fqn, originalContent);
+                    modifiedDependentCodes.put(fqn, originalContent);
+                }
 
             } catch (Exception e) {
                 // Handle files that might not exist in one version (e.g., deleted or added)
@@ -198,11 +214,21 @@ public class ImpactAnalyzerUtil {
                 // In a real system, you'd decide how to handle missing files (e.g., put null)
             }
         }
-
         Map<String, Map<String, String>> maps = new HashMap<>();
         maps.put("original", originalDependentCodes);
         maps.put("modified", modifiedDependentCodes);
         return maps;
+    }
+
+    public static List<String> removeDuplicatesUsingSet(List<String> listWithDuplicates) {
+
+        // 1. Convert the ArrayList to a HashSet. The Set automatically filters out duplicates.
+        Set<String> setWithoutDuplicates = new HashSet<>(listWithDuplicates);
+
+        // 2. Convert the Set back to an ArrayList.
+        List<String> listWithoutDuplicates = new ArrayList<>(setWithoutDuplicates);
+
+        return listWithoutDuplicates;
     }
 
     public static Map<String, List<String>> generateDiffs(

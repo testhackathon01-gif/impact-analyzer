@@ -169,6 +169,10 @@ public class ImpactAnalyzer {
 
     // --- The Core Prompt Generation Method ---
     public String generateCoTPromptWithSchema(String moduleADiff, String contextualModules) {
+
+        // Define the newline constant for cleaner code
+        final String NL = "\n";
+
         StringBuilder prompt = new StringBuilder();
         prompt.append("You are an expert Software Architect for Java. Your task is to perform a detailed cascading impact analysis.")
                 .append(NL).append(NL);
@@ -182,8 +186,9 @@ public class ImpactAnalyzer {
                 .append(NL).append("1. **Analyze Contractual Change in Module A:** Identify the exact change in public signature, input expectations, and output type/format.")
                 .append(NL).append("2. **Trace Direct Dependencies (Syntactic Check):** Examine the CONTEXTUAL MODULES to see if they directly call the changed method. Identify immediate compilation/runtime errors (API breaks).")
                 .append(NL).append("3. **Trace Semantic Dependencies (Logic Check):** For the directly impacted modules, analyze how the *new business logic or data values* (e.g., changing 'TypeX' to 'CLEAN') will flow to downstream logic and potentially cause subtle bugs or incorrect processing.")
-                .append(NL).append("4. **Determine Risk Score:** Conclude with a Risk Score (1-10) based on the severity and scope of the identified impacts.")
-                .append(NL).append("5. **Format Final Output:** Generate the final analysis report strictly as a JSON object.")
+                .append(NL).append("4. **Validate Code Removals (Dead Code Check):** If any methods were removed from Module A (Source of Change), confirm whether those methods were called by any CONTEXTUAL MODULES. If zero callers are found, conclude the removal is safe (NO_IMPACT).")
+                .append(NL).append("5. **Determine Risk Score:** Conclude with a Risk Score (1-10) based on the severity and scope of the identified impacts.")
+                .append(NL).append("6. **Format Final Output:** Generate the final analysis report strictly as a JSON object.") // Renumbered to 6
                 .append(NL).append(NL);
 
         // --- Input Code ---
@@ -197,7 +202,7 @@ public class ImpactAnalyzer {
 
         // --- Output Instructions (CRITICAL MODIFICATION HERE) ---
         prompt.append("### 3. FINAL OUTPUT")
-                .append(NL).append("**CRITICAL REQUIREMENT:** Based on your reasoning, you **MUST** populate the `impactedModules` array with a separate entry for every module identified as having a SYNTACTIC_BREAK or SEMANTIC_BREAK.")
+                .append(NL).append("**CRITICAL REQUIREMENT:** Based on your reasoning, you **MUST** populate the `impactedModules` array with a separate entry for every module identified as having a SYNTACTIC_BREAK, SEMANTIC_BREAK, or NO_IMPACT (for safe removals).")
                 .append(NL).append("The `reasoning` field should contain the full Chain of Thought. DO NOT put the module-specific findings in the `reasoning` field; put them in the `impactedModules` list.")
                 .append(NL).append("Return ONLY a valid JSON object that strictly adheres to the provided schema.");
 
