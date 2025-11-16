@@ -11,6 +11,7 @@ import java.util.List;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.api.client.util.Value;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
@@ -24,8 +25,9 @@ public class GitRepoLister {
     private final ObjectMapper mapper = new ObjectMapper();
     private List<String> publicRepoList = Collections.emptyList();
 
-    public GitRepoLister(String token) {
-        this.token = token;
+
+    public GitRepoLister() {
+        this.token = "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";
         this.http = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
@@ -127,7 +129,7 @@ public class GitRepoLister {
             System.exit(1);
         }
 
-        GitRepoLister lister = new GitRepoLister(token);
+        GitRepoLister lister = new GitRepoLister();
         try {
             this.publicRepoList = lister.listRepos(username);
         } catch (IOException | InterruptedException e) {
