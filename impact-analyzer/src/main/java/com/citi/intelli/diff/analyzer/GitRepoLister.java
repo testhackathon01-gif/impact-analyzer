@@ -110,7 +110,7 @@ public class GitRepoLister {
     }
     @PostConstruct
     public void setPublicRepoList() {
-        String token = "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";
+        String token = "";//"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";
         String username = "";
         /*if (args.length > 0) {
             username = args[0].trim();
