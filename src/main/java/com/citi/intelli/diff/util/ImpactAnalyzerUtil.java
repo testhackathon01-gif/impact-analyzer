@@ -1,11 +1,13 @@
 package com.citi.intelli.diff.util;
 
+import com.citi.intelli.diff.analyzer.DependencyResolver;
 import com.citi.intelli.diff.analyzer.ImpactAnalyzer;
 import com.citi.intelli.diff.api.model.AggregatedChangeReport;
 import com.citi.intelli.diff.api.model.ImpactReport;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -13,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 
+@Component
 public class ImpactAnalyzerUtil {
 
     final static String FILE_SPLIT_MARKER = "\n// --- FILE SPLIT --- \n";
