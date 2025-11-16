@@ -172,10 +172,10 @@ public class Test {
             totalFileList.add("com.app.moduled.Service");
 
             // 4. EXECUTE ANALYSIS LOOP
-            List<AggregatedChangeReport> masterReportList =getImpactAnalysisReport(totalFileList);
+            //List<AggregatedChangeReport> masterReportList =getImpactAnalysisReport(totalFileList);
 
             // 5. PRINT CONSOLIDATED OUTPUT
-            printConsolidatedReport(masterReportList); // Call helper method directly
+            //printConsolidatedReport(masterReportList); // Call helper method directly
 
         } catch (Exception e) {
             e.printStackTrace();

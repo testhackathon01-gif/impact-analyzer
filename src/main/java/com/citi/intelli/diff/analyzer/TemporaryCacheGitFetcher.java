@@ -1,24 +1,31 @@
 package com.citi.intelli.diff.analyzer;
 
-import lombok.extern.apachecommons.CommonsLog;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.lib.StoredConfig;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
-import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
+import javax.annotation.PostConstruct;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-@Component
+@Service
 public class TemporaryCacheGitFetcher {
+
+    private Map<String, Map<String, String>> classMetadataMap = new HashMap<>();
+
+    @Autowired
+    GitRepoLister gitRepoList;
 
     public static File fetchAndCheckoutSourceCode(String repoUrl, String branch) throws Exception {
         Repository bareRepo = null;
@@ -111,15 +118,17 @@ public class TemporaryCacheGitFetcher {
             System.err.println("Error during cleanup: " + e.getMessage());
         }
     }
-
-    public static Map<String, Map<String,String>>  accessRemoteRepoAndGetTheFileContents(List<String> repoList) {
-        repoList.add("https://github.com/HouariZegai/Calculator.git");
+    @PostConstruct
+    public void  accessRemoteRepoAndGetTheFileContents() {
+        List<String> repoList = new ArrayList<>();
+        repoList.addAll(gitRepoList.getPublicRepoList());
         String targetBranch = "master";
         File sourceCodeDir = null;
-        Map<String, Map<String, String>> classMetadataMap = new HashMap<>();
+        Map<String, Map<String, String>> metaDataMap = new HashMap<>();
 
         for (String repoUrl : repoList) {
-
+            Map<String, String> attributes = new HashMap<>();
+            System.out.println("Repo Name:"+repoUrl);
             try {
                 sourceCodeDir = fetchAndCheckoutSourceCode(repoUrl, targetBranch);
 
@@ -127,6 +136,7 @@ public class TemporaryCacheGitFetcher {
 
                 Path sourceRoot = sourceCodeDir.toPath().resolve("src/main/java");
                 System.out.println("Scanning for Java classes in: " + sourceRoot.toAbsolutePath());
+// Create a map for the specific class's metadata
 
                 if (Files.exists(sourceRoot)) {
                     try (Stream<Path> paths = Files.walk(sourceRoot)) {
@@ -147,9 +157,6 @@ public class TemporaryCacheGitFetcher {
                                         System.out.println("packageName: " + packageName);
                                     }
 
-                                    // Create a map for the specific class's metadata
-                                    Map<String, String> attributes = new HashMap<>();
-
                                     // --- New Logic: Read Raw File Content ---
                                     String rawContent = "Error reading file content.";
                                     try {
@@ -160,7 +167,7 @@ public class TemporaryCacheGitFetcher {
                                         System.err.println("Failed to read raw content for " + fqcn + ": " + e.getMessage());
                                     }
                                     attributes.put(packageName, rawContent);
-                                    classMetadataMap.put(repoUrl, attributes);
+                                    metaDataMap.put(repoUrl, attributes);
 
                                 });
                     } catch (IOException e) {
@@ -178,6 +185,9 @@ public class TemporaryCacheGitFetcher {
                 }
             }
         }
-        return classMetadataMap;
+        this.classMetadataMap = metaDataMap;
+    }
+    public Map<String, Map<String,String>> getRepoMetaData(){
+        return this.classMetadataMap;
     }
 }

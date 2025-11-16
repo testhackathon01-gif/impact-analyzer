@@ -14,6 +14,7 @@ public interface ImpactAnalyzerService {
      * @return A list of reports for each detected change.
      */
     List<AggregatedChangeReport> runAnalysis(
+            String selectedRepository,
             List<String> repositoryUrls,
             String localFilePath,
             String targetFilename
@@ -21,5 +22,5 @@ public interface ImpactAnalyzerService {
 
      List<String> getAvailableRepositories();
 
-     String getClassCode(String repoIdentifier, String filename);
+     String getClassCode(String selectedRepo,  String targetFilename);
 }

@@ -2,11 +2,14 @@ package com.citi.intelli.diff.util;
 
 import com.citi.intelli.diff.analyzer.DependencyResolver;
 import com.citi.intelli.diff.analyzer.ImpactAnalyzer;
+import com.citi.intelli.diff.analyzer.TemporaryCacheGitFetcher;
 import com.citi.intelli.diff.api.model.AggregatedChangeReport;
 import com.citi.intelli.diff.api.model.ImpactReport;
+import com.citi.intelli.diff.service.ImpactAnalyzerService;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
@@ -20,8 +23,11 @@ public class ImpactAnalyzerUtil {
 
     final static String FILE_SPLIT_MARKER = "\n// --- FILE SPLIT --- \n";
 
-    public static final String ORIGINAL_FOLDER_PATH = "C:\\Users\\DELL\\Downloads\\impact-analyzer\\original\\";
-    public static final String MODIFIED_FOLDER_PATH = "C:\\Users\\DELL\\Downloads\\impact-analyzer\\modified\\";
+    @Autowired
+    static TemporaryCacheGitFetcher temporaryCacheGitFetcher;
+
+    //public static final String ORIGINAL_FOLDER_PATH = "C:\\Users\\DELL\\Downloads\\impact-analyzer\\original\\";
+    //public static final String MODIFIED_FOLDER_PATH = "C:\\Users\\DELL\\Downloads\\impact-analyzer\\modified\\";
 
 
     private static String extractTargetMethodName(String diffSnippet) {
@@ -46,6 +52,19 @@ public class ImpactAnalyzerUtil {
         }
 
         return "unknownMethod";
+    }
+
+    public static String getSubMapValue(Map<String,Map<String,String>> localRepoCache,String repoKey,
+                                 String fileKey) {
+        // 1. Get the inner map using the repository key
+        Map<String, String> innerMap = localRepoCache.get(repoKey);
+        // Check if the repository key exists
+        if (innerMap == null) {
+            // Repository not found, return null
+            return null;
+        }
+        // 2. Get the final value using the file key on the inner map
+        return innerMap.get(fileKey);
     }
 
     public static List<AggregatedChangeReport> executeAnalysisLoop(
@@ -109,9 +128,9 @@ public class ImpactAnalyzerUtil {
         return masterReportList;
     }
 
-    public static List<AggregatedChangeReport> getImpactAnalysisReport(List<String> totalFileList) throws Exception {
+    public static List<AggregatedChangeReport> getImpactAnalysisReport(List<String> totalFileList,String selectedRepo,String localPath, String fileName) throws Exception {
 
-        Map<String, Map<String, String>> data = ImpactAnalyzerUtil.loadDynamicCodeMaps(totalFileList);
+        Map<String, Map<String, String>> data = ImpactAnalyzerUtil.loadDynamicCodeMaps(totalFileList,selectedRepo,localPath, fileName);
         // Call helper method directly
         Map<String, String> originalDependentCodes = data.get("original");
         Map<String, String> modifiedDependentCodes = data.get("modified");
@@ -149,7 +168,7 @@ public class ImpactAnalyzerUtil {
     */
     }
 
-    public static Map<String, Map<String, String>> loadDynamicCodeMaps(List<String> data) {
+    public static Map<String, Map<String, String>> loadDynamicCodeMaps(List<String> data, String localPath, String changedRepo, String fileName) {
 
         // 1. Create the two maps to hold the final FQN -> Code content
         Map<String, String> originalDependentCodes = new HashMap<>();
@@ -163,12 +182,13 @@ public class ImpactAnalyzerUtil {
 
             try {
                 // A. Load Original (Baseline) Code
-                String originalPath = ORIGINAL_FOLDER_PATH + File.separator + relativeFilePath;
-                String originalContent = readFileContent(originalPath);
+                //String originalPath = ORIGINAL_FOLDER_PATH + File.separator + relativeFilePath;
+                //String originalContent = readFileContent(originalPath);
+                String originalContent= ImpactAnalyzerUtil.getSubMapValue(temporaryCacheGitFetcher.getRepoMetaData(),changedRepo,fileName);
                 originalDependentCodes.put(fqn, originalContent);
 
                 // B. Load Modified (Target) Code
-                String modifiedPath = MODIFIED_FOLDER_PATH + File.separator + relativeFilePath;
+                String modifiedPath = localPath + File.separator + relativeFilePath;
                 String modifiedContent = readFileContent(modifiedPath);
                 modifiedDependentCodes.put(fqn, modifiedContent);
 

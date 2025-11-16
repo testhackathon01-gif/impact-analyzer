@@ -36,7 +36,8 @@ public class ImpactAnalyzerController {
         try {
             // 2. Delegate the core business logic to the service layer
             List<AggregatedChangeReport> report = analyzerService.runAnalysis(
-                    request.getRepositoryUrls(),
+                    request.getSelectedRepository(),
+                    request.getCompareRepositoryUrls(),
                     request.getLocalFilePath(),
                     request.getTargetFilename()
             );

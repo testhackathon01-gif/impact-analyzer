@@ -87,9 +87,12 @@ The core functionality is exposed through a single POST endpoint.
 
 ```json
 {
-    "repositoryUrls": [],
-    "localFilePath": "/Users/user/projects/mock_test_repo",
-    "targetFilename": "A_Helper.java"
+    "selectedRepository": "https://github.com/testhackathon01-gif/order-purchase",
+    "compareRepositoryUrls": [
+        "https://github.com/testhackathon01-gif/order-purchase"
+    ],
+    "localFilePath": "C:/Users/DELL/Downloads/order-purchase/src/main/java/",
+    "targetFilename": "PricingUtility.java"
 }
 
 [

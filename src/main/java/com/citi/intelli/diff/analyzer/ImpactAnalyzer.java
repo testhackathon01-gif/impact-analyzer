@@ -4,6 +4,7 @@ import com.citi.intelli.diff.api.model.ImpactReport;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -17,6 +18,7 @@ import java.util.stream.Collectors;
 
 @Component
 public class ImpactAnalyzer {
+
 
     // Use System.lineSeparator() for cross-platform compatibility
     private static final String NL = System.lineSeparator();
