@@ -7,7 +7,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
+import java.util.Map;
 
+@CrossOrigin(origins = "http://localhost:50429")
 @RestController // Marks this class as a Spring REST Controller
 @RequestMapping("/api/v1/impact") // Base URL path for all APIs in this controller
 public class ImpactAnalyzerController {
@@ -29,7 +31,7 @@ public class ImpactAnalyzerController {
     public ResponseEntity<List<AggregatedChangeReport>> analyze(@RequestBody AnalysisRequest request) {
 
         // 1. Validate the request (basic check)
-        if (request.getLocalFilePath() == null || request.getTargetFilename() == null) {
+        if (request.getChangedCode() == null || request.getTargetFilename() == null) {
             // Handle bad request
             return ResponseEntity.badRequest().build();
         }
@@ -38,7 +40,7 @@ public class ImpactAnalyzerController {
             List<AggregatedChangeReport> report = analyzerService.runAnalysis(
                     request.getSelectedRepository(),
                     request.getCompareRepositoryUrls(),
-                    request.getLocalFilePath(),
+                    request.getChangedCode(),
                     request.getTargetFilename()
             );
 
@@ -58,12 +60,14 @@ public class ImpactAnalyzerController {
      * Response Body: List<RepositoryInfo> JSON
      */
     @GetMapping("/repositories")
-    public ResponseEntity<List<String>> getRepositories() {
+    public ResponseEntity<Map<String, Map<String, String>>> getRepositories() {
         // 1. Call the service to get the data
-        List<String> repos = analyzerService.getAvailableRepositories();
+        //List<String> repos = analyzerService.getAvailableRepositories();
+        Map<String, Map<String, String>> repos = analyzerService.getAvailableRepositories();
+        System.out.println(repos.keySet());
 
         // 2. Return the list with 200 OK status
-        return ResponseEntity.ok(repos);
+        return ResponseEntity.ok( repos);
     }
 
     /**

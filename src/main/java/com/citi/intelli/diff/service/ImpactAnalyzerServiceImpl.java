@@ -25,7 +25,7 @@ public class ImpactAnalyzerServiceImpl implements ImpactAnalyzerService{
     TemporaryCacheGitFetcher temporaryCacheGitFetcher;
 
     @Override
-    public List<AggregatedChangeReport> runAnalysis(String selectedRepo, List<String> compareRepositoryUrls, String localFilePath, String targetFilename) throws Exception {
+    public List<AggregatedChangeReport> runAnalysis(String selectedRepo, List<String> compareRepositoryUrls, String changedCode, String targetFilename) throws Exception {
 
         Map<String,Map<String,String>> localRepoCache= temporaryCacheGitFetcher.getRepoMetaData();
         compareRepositoryUrls.add(selectedRepo);
@@ -49,7 +49,7 @@ public class ImpactAnalyzerServiceImpl implements ImpactAnalyzerService{
         totalFileList.add("com.app.moduled.Service");*/
 
         // 4. EXECUTE ANALYSIS LOOP
-        List<AggregatedChangeReport> masterReportList = impactAnalyzerUtil.getImpactAnalysisReport(allFiles,allFilesWithMetaDataMap,localFilePath,targetFilename);
+        List<AggregatedChangeReport> masterReportList = impactAnalyzerUtil.getImpactAnalysisReport(allFiles,allFilesWithMetaDataMap,changedCode,targetFilename);
 
         return masterReportList;
     }
@@ -103,8 +103,8 @@ public class ImpactAnalyzerServiceImpl implements ImpactAnalyzerService{
         return combinedSubMapKeys;
     }
 
-    public List<String> getAvailableRepositories() {
-        return gitRepoLister.getPublicRepoList();
+    public Map<String, Map<String, String>> getAvailableRepositories() {
+        return temporaryCacheGitFetcher.getRepoMetaData();
     }
 
     public String getClassCode(String repoIdentifier, String fileName){

@@ -125,12 +125,17 @@ public class ImpactAnalyzerUtil {
                 masterReportList.add(aggReport);
             }
         }
+        if(masterReportList.isEmpty()){
+            AggregatedChangeReport aggReport = new AggregatedChangeReport();
+            aggReport.changedMethod = "No Impact Found!!";
+            masterReportList.add(aggReport);
+        }
         return masterReportList;
     }
 
-    public  List<AggregatedChangeReport> getImpactAnalysisReport(List<String> totalFileList,Map<String, String> allFilesWithMetaDataMap,String localPath, String fileName) throws Exception {
+    public  List<AggregatedChangeReport> getImpactAnalysisReport(List<String> totalFileList,Map<String, String> allFilesWithMetaDataMap,String changedCode, String fileName) throws Exception {
 
-        Map<String, Map<String, String>> data = loadDynamicCodeMaps(totalFileList,allFilesWithMetaDataMap,localPath, fileName);
+        Map<String, Map<String, String>> data = loadDynamicCodeMaps(totalFileList,allFilesWithMetaDataMap,changedCode, fileName);
         // Call helper method directly
         Map<String, String> originalDependentCodes = data.get("original");
         Map<String, String> modifiedDependentCodes = data.get("modified");
@@ -182,7 +187,7 @@ public class ImpactAnalyzerUtil {
     */
     }
 
-    public Map<String, Map<String, String>> loadDynamicCodeMaps(List<String> data, Map<String, String> allFilesWithMetaDataMap, String localPath, String fileName) {
+    public Map<String, Map<String, String>> loadDynamicCodeMaps(List<String> data, Map<String, String> allFilesWithMetaDataMap, String changedCode, String fileName) {
 
         // 1. Create the two maps to hold the final FQN -> Code content
         Map<String, String> originalDependentCodes = new HashMap<>();
@@ -199,10 +204,10 @@ public class ImpactAnalyzerUtil {
                 String originalContent= allFilesWithMetaDataMap.get(fqn);
                 if(relativeFilePath.contains(fileName)){
                     fileName= fqn;
-                    String modifiedPath = localPath + File.separator + relativeFilePath;
-                    String modifiedContent = readFileContent(modifiedPath);
+                    //String modifiedPath = changedCode + File.separator + relativeFilePath;
+                    //String modifiedContent = readFileContent(modifiedPath);
                     originalDependentCodes.put(fqn, originalContent);
-                    modifiedDependentCodes.put(fqn, modifiedContent);
+                    modifiedDependentCodes.put(fqn, changedCode);
                 }else{
                     originalDependentCodes.put(fqn, originalContent);
                     modifiedDependentCodes.put(fqn, originalContent);

@@ -3,6 +3,7 @@ package com.citi.intelli.diff.service;
 
 import com.citi.intelli.diff.api.model.AggregatedChangeReport;
 import java.util.List;
+import java.util.Map;
 
 public interface ImpactAnalyzerService {
 
@@ -16,11 +17,11 @@ public interface ImpactAnalyzerService {
     List<AggregatedChangeReport> runAnalysis(
             String selectedRepository,
             List<String> repositoryUrls,
-            String localFilePath,
+            String changedCode,
             String targetFilename
     ) throws Exception;
 
-     List<String> getAvailableRepositories();
+    Map<String, Map<String, String>> getAvailableRepositories();
 
      String getClassCode(String selectedRepo,  String targetFilename);
 }
