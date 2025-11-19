@@ -2,13 +2,17 @@ package com.citi.intelli.diff.controller;
 
 import com.citi.intelli.diff.api.model.AnalysisRequest;
 import com.citi.intelli.diff.api.model.AggregatedChangeReport;
+import com.citi.intelli.diff.api.model.ConciseAnalysisReport;
 import com.citi.intelli.diff.service.ImpactAnalyzerService;
+import com.citi.intelli.diff.util.ImpactPostProcessor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @CrossOrigin(origins = "http://localhost:50429")
 @RestController // Marks this class as a Spring REST Controller
 @RequestMapping("/api/v1/impact") // Base URL path for all APIs in this controller
@@ -28,7 +32,7 @@ public class ImpactAnalyzerController {
      * Response Body: List<AggregatedChangeReport> JSON
      */
     @PostMapping(value = "/analyze", consumes = "application/json")
-    public ResponseEntity<List<AggregatedChangeReport>> analyze(@RequestBody AnalysisRequest request) {
+    public ResponseEntity<List<ConciseAnalysisReport>> analyze(@RequestBody AnalysisRequest request) {
 
         // 1. Validate the request (basic check)
         if (request.getChangedCode() == null || request.getTargetFilename() == null) {
@@ -43,9 +47,10 @@ public class ImpactAnalyzerController {
                     request.getChangedCode(),
                     request.getTargetFilename()
             );
-
+            List<ConciseAnalysisReport> finalReport= ImpactPostProcessor.processReports(report,request.getTargetFilename());
+            log.info("Received final response");
             // 3. Return the 200 OK status with the analysis report
-            return ResponseEntity.ok(report);
+            return ResponseEntity.ok(finalReport);
 
         } catch (Exception e) {
             // Log the error and return a 500 Internal Server Error

@@ -1,10 +1,11 @@
-
 package com.citi.intelli.diff.api.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Data;
 
 import java.util.List;
 
+@Data
 public class ImpactReport {
 
     @JsonProperty("analysisId")
@@ -16,16 +17,20 @@ public class ImpactReport {
     @JsonProperty("reasoning")
     private String reasoning;
 
+    @JsonProperty("testStrategy")
+    private TestStrategy testStrategy;
+
     @JsonProperty("impactedModules")
     private List<ImpactedModule> impactedModules;
 
     // Constructors
     public ImpactReport() {}
 
-    public ImpactReport(String analysisId, int riskScore, String reasoning, List<ImpactedModule> impactedModules) {
+    public ImpactReport(String analysisId, int riskScore, String reasoning, TestStrategy testStrategy, List<ImpactedModule> impactedModules) {
         this.analysisId = analysisId;
         this.riskScore = riskScore;
         this.reasoning = reasoning;
+        this.testStrategy = testStrategy; // <-- Added to constructor
         this.impactedModules = impactedModules;
     }
 
@@ -54,6 +59,15 @@ public class ImpactReport {
         this.reasoning = reasoning;
     }
 
+    // NEW GETTER AND SETTER
+    public TestStrategy getTestStrategy() {
+        return testStrategy;
+    }
+
+    public void setTestStrategy(TestStrategy testStrategy) {
+        this.testStrategy = testStrategy;
+    }
+
     public List<ImpactedModule> getImpactedModules() {
         return impactedModules;
     }
@@ -62,9 +76,8 @@ public class ImpactReport {
         this.impactedModules = impactedModules;
     }
 
-    // Nested class for impacted modules
+    @Data
     public static class ImpactedModule {
-
         @JsonProperty("moduleName")
         private String moduleName;
 
@@ -73,49 +86,6 @@ public class ImpactReport {
 
         @JsonProperty("description")
         private String description;
-
-        // Constructors
-        public ImpactedModule() {}
-
-        public ImpactedModule(String moduleName, String impactType, String description) {
-            this.moduleName = moduleName;
-            this.impactType = impactType;
-            this.description = description;
-        }
-
-        // Getters and Setters
-        public String getModuleName() {
-            return moduleName;
-        }
-
-        public void setModuleName(String moduleName) {
-            this.moduleName = moduleName;
-        }
-
-        public String getImpactType() {
-            return impactType;
-        }
-
-        public void setImpactType(String impactType) {
-            this.impactType = impactType;
-        }
-
-        public String getDescription() {
-            return description;
-        }
-
-        public void setDescription(String description) {
-            this.description = description;
-        }
-
-        @Override
-        public String toString() {
-            return "ImpactedModule{" +
-                    "moduleName='" + moduleName + '\'' +
-                    ", impactType='" + impactType + '\'' +
-                    ", description='" + description + '\'' +
-                    '}';
-        }
     }
 
     @Override
@@ -124,6 +94,7 @@ public class ImpactReport {
                 "analysisId='" + analysisId + '\'' +
                 ", riskScore=" + riskScore +
                 ", reasoning='" + reasoning + '\'' +
+                ", testStrategy=" + testStrategy +
                 ", impactedModules=" + impactedModules +
                 '}';
     }

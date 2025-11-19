@@ -26,7 +26,7 @@ public class GitRepoLister {
     private final HttpClient http;
 
     // 1. Token injected from application.properties
-    @Value("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")
+    @Value("")
     private String token;
 
     private final ObjectMapper mapper = new ObjectMapper();
@@ -133,7 +133,7 @@ public class GitRepoLister {
 
     @PostConstruct
     public void setPublicRepoList() {
-        String username = ""; // Use null or blank string to fetch authenticated user's repos
+        String username = "testhackathon01-gif"; // Use null or blank string to fetch authenticated user's repos
 
         // The check for token is now implicitly handled by Spring trying to load the @Value
         // If the token is missing from properties, Spring will fail to start.

@@ -17,6 +17,8 @@ import java.io.FileNotFoundException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 @Component
 public class ImpactAnalyzerUtil {
@@ -26,32 +28,68 @@ public class ImpactAnalyzerUtil {
     @Autowired
     TemporaryCacheGitFetcher temporaryCacheGitFetcher;
 
+    @Autowired
+    private ImpactAnalyzer impactAnalyzer;
+
     //public static final String ORIGINAL_FOLDER_PATH = "C:\\Users\\DELL\\Downloads\\impact-analyzer\\original\\";
     //public static final String MODIFIED_FOLDER_PATH = "C:\\Users\\DELL\\Downloads\\impact-analyzer\\modified\\";
 
 
-    private static String extractTargetMethodName(String diffSnippet) {
-        int startIndex = diffSnippet.indexOf("// NEW Signature:");
-        if (startIndex == -1) return "unknownMethod";
+    private static String extractTargetMemberName(String diffSnippet) {
+        // 1. Check for FIELD change markers
+        if (diffSnippet.contains("// TYPE: FIELD_MODIFIED") ||
+                diffSnippet.contains("// TYPE: FIELD_ADDED") ||
+                diffSnippet.contains("// TYPE: FIELD_REMOVED")) {
 
-        int headerEndIndex = diffSnippet.indexOf('\n', startIndex);
-        if (headerEndIndex == -1) return "unknownMethod";
+            // Look for the specific FIELD name marker
+            int startIndex = diffSnippet.indexOf("// FIELD:");
+            if (startIndex != -1) {
+                int nameStart = startIndex + "// FIELD:".length();
+                int nameEnd = diffSnippet.indexOf('\n', nameStart);
 
-        String methodCodeBlock = diffSnippet.substring(headerEndIndex).trim();
-
-        try {
-            String wrappedCode = "class Dummy {" + methodCodeBlock + "}";
-            CompilationUnit cu = StaticJavaParser.parse(wrappedCode);
-            Optional<MethodDeclaration> method = cu.findFirst(MethodDeclaration.class);
-
-            if (method.isPresent()) {
-                return method.get().getNameAsString();
+                // Extract the field name and trim whitespace
+                return diffSnippet.substring(nameStart, nameEnd).trim();
             }
-        } catch (Exception e) {
-            System.err.println("Critical error: Failed to parse method code for dynamic name extraction. " + e.getMessage());
         }
 
-        return "unknownMethod";
+        // 2. Fallback to METHOD change markers (your existing logic, modified)
+        int methodStartIndex = diffSnippet.indexOf("// NEW Signature:");
+        if (methodStartIndex != -1) {
+
+            // Find the start of the actual method code block
+            int headerEndIndex = diffSnippet.indexOf('\n', methodStartIndex);
+            if (headerEndIndex == -1) return "unknownMember";
+
+            String methodCodeBlock = diffSnippet.substring(headerEndIndex).trim();
+
+            try {
+                // Safely wrap and parse the method code block
+                String wrappedCode = "class Dummy {" + methodCodeBlock + "}";
+                CompilationUnit cu = StaticJavaParser.parse(wrappedCode);
+                Optional<MethodDeclaration> method = cu.findFirst(MethodDeclaration.class);
+
+                if (method.isPresent()) {
+                    return method.get().getNameAsString();
+                }
+            } catch (Exception e) {
+                System.err.println("Warning: Failed to parse method code for name extraction. " + e.getMessage());
+            }
+        }
+
+        // 3. Fallback for other Type or Metadata changes
+        if (diffSnippet.contains("// TYPE: TYPE_") || diffSnippet.contains("// TYPE: STRUCTURAL_")) {
+            // Look for the generic MEMBER name marker
+            int startIndex = diffSnippet.indexOf("// MEMBER:");
+            if (startIndex != -1) {
+                int nameStart = startIndex + "// MEMBER:".length();
+                int nameEnd = diffSnippet.indexOf('\n', nameStart);
+                return diffSnippet.substring(nameStart, nameEnd).trim();
+            }
+            // If it's metadata, just return a generic indicator
+            return "FileMetadataChange";
+        }
+
+        return "unknownMember";
     }
 
     public static String getSubMapValue(Map<String,Map<String,String>> localRepoCache,String repoKey,
@@ -67,39 +105,41 @@ public class ImpactAnalyzerUtil {
         return innerMap.get(fileKey);
     }
 
-    public static List<AggregatedChangeReport> executeAnalysisLoop(
-            Map<String, List<String>> allModuleADiffs,
-            Map<String, String> originalDependentCodes,
-            Map<String, String> modifiedDependentCodes) throws Exception {
+// Inside ImpactAnalyzerUtil.java
+
+    public List<CompletableFuture<AggregatedChangeReport>> executeAnalysisLoop( // <-- Changed return type
+                                                                                Map<String, List<String>> allModuleADiffs,
+                                                                                Map<String, String> originalDependentCodes,
+                                                                                Map<String, String> modifiedDependentCodes) throws Exception {
 
         if (allModuleADiffs.isEmpty()) {
             System.out.println("No structural changes found. Analysis complete.");
             return List.of();
         }
 
+        // DependencyResolver setup... (remains the same)
         setupMockFiles(modifiedDependentCodes);
         DependencyResolver resolver = new DependencyResolver(
                 List.of(System.getProperty("PROJECT_ROOT"))
         );
 
-        List<AggregatedChangeReport> masterReportList = new ArrayList<>();
+        // 💡 CHANGED: List to store asynchronous futures, not reports
+        List<CompletableFuture<AggregatedChangeReport>> analysisFutures = new ArrayList<>();
 
         for (Map.Entry<String, List<String>> fileChangeEntry : allModuleADiffs.entrySet()) {
             String changedFileFQN = fileChangeEntry.getKey();
             List<String> diffSnippets = fileChangeEntry.getValue();
 
             for (String changeDiffSnippet : diffSnippets) {
-                String targetMethodName = extractTargetMethodName(changeDiffSnippet);
+                String targetMethodName = extractTargetMemberName(changeDiffSnippet);
 
-                System.out.println("\n############################################################");
-                System.out.println("# ANALYZING CHANGE: " + changedFileFQN + "." + targetMethodName + "()");
-                System.out.println("############################################################");
+                // ... (Debugging/Logging) ...
 
-                // D. Find ALL callers
+                // D. Find ALL callers (Synchronous step - must happen before LLM call)
                 Map<String, List<MethodDeclaration>> allCallersMap =
                         resolver.findAllCallersOfMethod(changedFileFQN, targetMethodName, originalDependentCodes);
 
-                // E. Prepare LLM Context
+                // E. Prepare LLM Context (Synchronous step)
                 Map<String, CompilationUnit> llmContextMap = new HashMap<>();
                 for (String callingModuleFQN : allCallersMap.keySet()) {
                     String moduleCode = originalDependentCodes.get(callingModuleFQN);
@@ -108,37 +148,47 @@ public class ImpactAnalyzerUtil {
                     }
                 }
 
-                // --- 4. RUN LLM ANALYZER ---
-                ImpactAnalyzer analyzer = new ImpactAnalyzer();
-                // Adding a debug print here to confirm the call
-                // System.out.println(">>> IMPACT ANALYZER CALLED for method: " + targetMethodName);
-                ImpactReport report = analyzer.analyze(
+                // --- 4. CREATE ASYNCHRONOUS TASK ---
+                // 💡 CHANGED: Call the injected analyzer and get a Future
+                CompletableFuture<ImpactReport> reportFuture = impactAnalyzer.analyze( // Use the injected field
                         changeDiffSnippet,
                         llmContextMap,
                         targetMethodName
                 );
 
-                // --- 5. AGGREGATION STEP ---
-                AggregatedChangeReport aggReport = new AggregatedChangeReport();
-                aggReport.changedMethod = targetMethodName;
-                aggReport.llmReport = report;
-                masterReportList.add(aggReport);
+                // --- 5. AGGREGATION STEP (Mapping the Future) ---
+                // 💡 CHANGED: Map the result of the Future to the AggregatedChangeReport
+                CompletableFuture<AggregatedChangeReport> aggFuture = reportFuture.thenApply(report -> {
+                    AggregatedChangeReport aggReport = new AggregatedChangeReport();
+                    aggReport.changedMethod = targetMethodName;
+                    aggReport.llmReport = report;
+                    return aggReport;
+                }).exceptionally(ex -> {
+                    System.err.println("Error analyzing task for method " + targetMethodName + ": " + ex.getMessage());
+                    // Return a failure report
+                    AggregatedChangeReport failedReport = new AggregatedChangeReport();
+                    failedReport.changedMethod = targetMethodName + " (Failed)";
+                    failedReport.llmReport = new ImpactReport(); // Empty report or specific error object
+                    return failedReport;
+                });
+
+                analysisFutures.add(aggFuture);
             }
         }
-        if(masterReportList.isEmpty()){
-            AggregatedChangeReport aggReport = new AggregatedChangeReport();
-            aggReport.changedMethod = "No Impact Found!!";
-            masterReportList.add(aggReport);
-        }
-        return masterReportList;
+
+        // No need for the empty report check here; it's handled in the final step
+
+        return analysisFutures; // Return the list of Futures
     }
 
-    public  List<AggregatedChangeReport> getImpactAnalysisReport(List<String> totalFileList,Map<String, String> allFilesWithMetaDataMap,String changedCode, String fileName) throws Exception {
+    // Inside ImpactAnalyzerUtil.java
+
+    public List<AggregatedChangeReport> getImpactAnalysisReport(List<String> totalFileList,Map<String, String> allFilesWithMetaDataMap,String changedCode, String fileName) throws Exception {
 
         Map<String, Map<String, String>> data = loadDynamicCodeMaps(totalFileList,allFilesWithMetaDataMap,changedCode, fileName);
-        // Call helper method directly
         Map<String, String> originalDependentCodes = data.get("original");
         Map<String, String> modifiedDependentCodes = data.get("modified");
+
         String fileNameWithPackage = null;
         for (String fqn : totalFileList) {
             // Convert FQN to a relative file path (e.g., com.app.modulea.A_Helper -> com/app/modulea/A_Helper.java)
@@ -155,15 +205,54 @@ public class ImpactAnalyzerUtil {
         }
 
         // 3. DYNAMIC DIFF & METADATA EXTRACTION
-        Map<String, List<String>> allModuleADiffs = generateDiffs(originalDependentCodes, modifiedDependentCodes, fileNameWithPackage); // Call helper method directly
+        Map<String, List<String>> allModuleADiffs = generateDiffs(originalDependentCodes, modifiedDependentCodes, fileNameWithPackage);
         System.out.println("--- Found structural changes in " + allModuleADiffs.size() + " file(s) within Module A ---");
 
-        // 4. EXECUTE ANALYSIS LOOP
-        List<AggregatedChangeReport> masterReportList = executeAnalysisLoop( // Call helper method directly
+        // 4. EXECUTE ANALYSIS LOOP (Now calling the parallel orchestrator)
+        List<AggregatedChangeReport> masterReportList = executeParallelAnalysis( // 💡 CHANGED LINE
                 allModuleADiffs,
                 originalDependentCodes,
                 modifiedDependentCodes
         );
+        return masterReportList;
+    }
+
+    // Inside ImpactAnalyzerUtil.java
+
+    public List<AggregatedChangeReport> executeParallelAnalysis(
+            Map<String, List<String>> allModuleADiffs,
+            Map<String, String> originalDependentCodes,
+            Map<String, String> modifiedDependentCodes) throws Exception {
+
+        // 1. Collect all Futures (tasks)
+        List<CompletableFuture<AggregatedChangeReport>> futures = executeAnalysisLoop(
+                allModuleADiffs,
+                originalDependentCodes,
+                modifiedDependentCodes
+        );
+
+        if (futures.isEmpty()) {
+            return List.of();
+        }
+
+        // 2. Combine all Futures into a single Future that completes when ALL are done
+        CompletableFuture<Void> allFutures = CompletableFuture.allOf(
+                futures.toArray(new CompletableFuture[0])
+        );
+
+        // 3. Wait for all to complete and collect the results
+        List<AggregatedChangeReport> masterReportList = allFutures.thenApply(v -> futures.stream()
+                        .map(future -> future.join()) // .join() retrieves the result (and throws unchecked exception on failure)
+                        .collect(Collectors.toList()))
+                .join(); // Blocks the current thread until all tasks complete
+
+        // 4. Handle the scenario where no changes were found but we still want a report for consistency
+        if(masterReportList.isEmpty()){
+            AggregatedChangeReport aggReport = new AggregatedChangeReport();
+            aggReport.changedMethod = "No Impact Found!!";
+            masterReportList.add(aggReport);
+        }
+
         return masterReportList;
     }
 
@@ -289,45 +378,149 @@ public class ImpactAnalyzerUtil {
 
     private static List<String> generateSemanticDiffForFile(String originalContent, String modifiedContent) {
         try {
+            // Use JavaParser to parse the Abstract Syntax Trees (AST)
             CompilationUnit originalCu = StaticJavaParser.parse(originalContent);
             CompilationUnit modifiedCu = StaticJavaParser.parse(modifiedContent);
 
             List<String> semanticDiffs = new ArrayList<>();
 
+            // --- 1. COLLECT ALL MEMBERS FROM ORIGINAL VERSION ---
+            // Maps store the member's unique name as the key and its full string declaration as the value.
+
+            // Map for Methods (Key: methodName)
+            Map<String, String> originalMethodMap = new HashMap<>();
+            originalCu.findAll(MethodDeclaration.class).forEach(m ->
+                    // Use the full method declaration string for robust comparison
+                    originalMethodMap.put(m.getNameAsString(), m.toString())
+            );
+
+            // Map for Fields (Key: fieldName)
+            Map<String, String> originalFieldMap = new HashMap<>();
+            originalCu.findAll(com.github.javaparser.ast.body.FieldDeclaration.class).forEach(f ->
+                    // Put each variable name individually, associated with the parent FieldDeclaration string
+                    f.getVariables().forEach(v -> originalFieldMap.put(v.getNameAsString(), f.toString()))
+            );
+
+            // Map for Top-Level Types (Classes, Enums, Interfaces) (Key: typeName)
+            Map<String, String> originalTypeMap = new HashMap<>();
+            originalCu.findAll(com.github.javaparser.ast.body.TypeDeclaration.class).forEach(t ->
+                    originalTypeMap.put(t.getNameAsString(), t.toString())
+            );
+
+
+            // --- 2. CHECK FOR MODIFICATIONS AND ADDITIONS (Iterate Modified CU) ---
+
+            // Sets to track members found in the modified version (used later to detect deletions)
+            Set<String> processedModifiedMethods = new HashSet<>();
+            Set<String> processedModifiedFields = new HashSet<>();
+            Set<String> processedModifiedTypes = new HashSet<>();
+
+
+            // 2a. Check Methods
             for (MethodDeclaration modifiedMethod : modifiedCu.findAll(MethodDeclaration.class)) {
                 String methodName = modifiedMethod.getNameAsString();
+                processedModifiedMethods.add(methodName);
+                String modifiedMethodString = modifiedMethod.toString();
+                String originalMethodString = originalMethodMap.get(methodName);
 
-                Optional<MethodDeclaration> originalMethodOpt = originalCu.findAll(MethodDeclaration.class)
-                        .stream()
-                        .filter(m -> m.getNameAsString().equals(methodName))
-                        .findFirst();
+                if (originalMethodString == null) {
+                    // ADDITION
+                    semanticDiffs.add("// TYPE: METHOD_ADDED \n// MEMBER: " + methodName + " \n" + modifiedMethodString + "\n");
+                } else if (!originalMethodString.equals(modifiedMethodString)) {
+                    // MODIFICATION
+                    Optional<MethodDeclaration> originalMethodOpt = originalCu.findAll(MethodDeclaration.class)
+                            .stream().filter(m -> m.getNameAsString().equals(methodName)).findFirst();
 
-                if (originalMethodOpt.isPresent()) {
-                    MethodDeclaration originalMethod = originalMethodOpt.get();
+                    String oldSignature = originalMethodOpt.map(m -> m.getDeclarationAsString(false, true, true)).orElse("N/A");
+                    String newSignature = modifiedMethod.getDeclarationAsString(false, true, true);
 
-                    boolean isSignatureChanged = !originalMethod.getType().equals(modifiedMethod.getType()) ||
-                            !originalMethod.getParameters().equals(modifiedMethod.getParameters());
-
-                    boolean isBodyChanged = false;
-                    if (originalMethod.getBody().isPresent() && modifiedMethod.getBody().isPresent()) {
-                        isBodyChanged = !originalMethod.getBody().get().equals(modifiedMethod.getBody().get());
-                    } else if (originalMethod.getBody().isPresent() != modifiedMethod.getBody().isPresent()) {
-                        isBodyChanged = true;
-                    }
-
-                    if (isSignatureChanged || isBodyChanged) {
-                        StringBuilder semanticDiff = new StringBuilder();
-                        String oldSignature = originalMethod.getDeclarationAsString(false, true, true);
-                        String newSignature = modifiedMethod.getDeclarationAsString(false, true, true);
-
-                        semanticDiff.append("// OLD Signature: ").append(oldSignature).append(" \n");
-                        semanticDiff.append("// NEW Signature: ").append(newSignature).append(" \n");
-                        semanticDiff.append(modifiedMethod.toString()).append("\n");
-
-                        semanticDiffs.add(semanticDiff.toString());
-                    }
+                    semanticDiffs.add(
+                            "// TYPE: METHOD_MODIFIED \n" +
+                                    "// OLD Signature: " + oldSignature + " \n" +
+                                    "// NEW Signature: " + newSignature + " \n" +
+                                    modifiedMethodString + "\n"
+                    );
                 }
             }
+
+            // 2b. Check Fields (Constants/Variables)
+            for (com.github.javaparser.ast.body.FieldDeclaration modifiedField : modifiedCu.findAll(com.github.javaparser.ast.body.FieldDeclaration.class)) {
+                String modifiedFieldString = modifiedField.toString();
+
+                modifiedField.getVariables().forEach(modifiedVariable -> {
+                    String fieldName = modifiedVariable.getNameAsString();
+                    processedModifiedFields.add(fieldName);
+                    String originalFieldString = originalFieldMap.get(fieldName);
+
+                    if (originalFieldString == null) {
+                        // ADDITION
+                        semanticDiffs.add("// TYPE: FIELD_ADDED \n// MEMBER: " + fieldName + " \n" + modifiedFieldString + "\n");
+                    } else if (!originalFieldString.equals(modifiedFieldString)) {
+                        // MODIFICATION (Value or declaration changed)
+                        semanticDiffs.add(
+                                "// TYPE: FIELD_MODIFIED \n" +
+                                        "// FIELD: " + fieldName + " \n" +
+                                        "// OLD DECLARATION: " + originalFieldString + " \n" +
+                                        "// NEW DECLARATION: " + modifiedFieldString + "\n"
+                        );
+                    }
+                });
+            }
+
+            // 2c. Check Top-Level Types (Classes/Enums/Interfaces)
+            for (com.github.javaparser.ast.body.TypeDeclaration<?> modifiedType : modifiedCu.findAll(com.github.javaparser.ast.body.TypeDeclaration.class)) {
+                String typeName = modifiedType.getNameAsString();
+                processedModifiedTypes.add(typeName);
+                String modifiedTypeString = modifiedType.toString();
+                String originalTypeString = originalTypeMap.get(typeName);
+
+                if (originalTypeString == null) {
+                    // ADDITION
+                    semanticDiffs.add("// TYPE: TYPE_ADDED \n// MEMBER: " + typeName + " \n" + modifiedTypeString + "\n");
+                } else if (!originalTypeString.equals(modifiedTypeString)) {
+                    // MODIFICATION (Inheritance, interfaces, annotations, or inner members changed)
+                    semanticDiffs.add(
+                            "// TYPE: TYPE_MODIFIED \n" +
+                                    "// MEMBER: " + typeName + " \n" +
+                                    "// OLD DECLARATION: " + originalTypeString + " \n" +
+                                    "// NEW DECLARATION: " + modifiedTypeString + "\n"
+                    );
+                }
+            }
+
+
+            // --- 3. CHECK FOR DELETIONS (Iterate Original Maps) ---
+
+            // 3a. Check Deleted Methods
+            for (String originalMethodName : originalMethodMap.keySet()) {
+                if (!processedModifiedMethods.contains(originalMethodName)) {
+                    semanticDiffs.add("// TYPE: METHOD_REMOVED \n// MEMBER: " + originalMethodName + " \n" + originalMethodMap.get(originalMethodName) + "\n");
+                }
+            }
+
+            // 3b. Check Deleted Fields
+            for (String originalFieldName : originalFieldMap.keySet()) {
+                if (!processedModifiedFields.contains(originalFieldName)) {
+                    semanticDiffs.add("// TYPE: FIELD_REMOVED \n// MEMBER: " + originalFieldName + " \n" + originalFieldMap.get(originalFieldName) + "\n");
+                }
+            }
+
+            // 3c. Check Deleted Types
+            for (String originalTypeName : originalTypeMap.keySet()) {
+                if (!processedModifiedTypes.contains(originalTypeName)) {
+                    semanticDiffs.add("// TYPE: TYPE_REMOVED \n// MEMBER: " + originalTypeName + " \n" + originalTypeMap.get(originalTypeName) + "\n");
+                }
+            }
+
+            // --- 4. FALLBACK FOR STRUCTURAL/METADATA CHANGES ---
+            if (semanticDiffs.isEmpty() && !originalContent.equals(modifiedContent)) {
+                // This captures changes to imports, package name, or class-level Javadoc/comments
+                semanticDiffs.add(
+                        "// TYPE: STRUCTURAL_METADATA_CHANGE \n" +
+                                "// DESCRIPTION: Changes detected outside of primary members (e.g., imports, package, file-level comments). \n"
+                );
+            }
+
             return semanticDiffs;
         } catch (Exception e) {
             throw new RuntimeException("AST Parsing failed for file fragment.", e);
