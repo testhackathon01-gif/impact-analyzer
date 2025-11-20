@@ -1,16 +1,19 @@
 package com.impact.analyzer.analyzer;
 
-import com.impact.analyzer.api.model.ImpactReport;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.impact.analyzer.api.model.ImpactReport;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import lombok.extern.slf4j.Slf4j; // SLF4J logging import
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException; // Needed for robust error logging
 import reactor.core.publisher.Mono;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,14 +21,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Component
+@Slf4j
 public class ImpactAnalyzer {
-
 
     // Use System.lineSeparator() for cross-platform compatibility
     private static final String NL = System.lineSeparator();
 
     // --- JSON Schema Definition (for the LLM output) ---
-    // Inside ImpactAnalyzer.java
 
     private static final String IMPACT_REPORT_SCHEMA = """
         {
@@ -106,7 +108,7 @@ public class ImpactAnalyzer {
     private final ObjectMapper mapper = new ObjectMapper();
     private final String apiKey;
     private final WebClient webClient;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate = new RestTemplate(); // Field retained as requested
     // Using a more stable model for complex reasoning
     private static final String API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
@@ -115,8 +117,10 @@ public class ImpactAnalyzer {
         this.webClient = webClient;
         this.apiKey = "AIzaSyBkRhbKdRYcXB8yJgOr4_AkZS1HEIZcag0";
         if (this.apiKey == null || this.apiKey.isEmpty()) {
+            log.error("GEMINI_API_KEY is not configured.");
             throw new IllegalStateException("GEMINI_API_KEY environment variable is not set");
         }
+        log.info("ImpactAnalyzer initialized. API URL: {}", API_URL);
     }
 
     // Method now returns a CompletableFuture for asynchronous execution
@@ -125,6 +129,8 @@ public class ImpactAnalyzer {
         String contextualSnippets = extractContextualCode(relevantContextASTs, targetMethodSignature);
         String prompt = generateCoTPromptWithSchema(changedModuleDiff, contextualSnippets);
 
+        log.debug("Generated prompt (first 200 chars): {}", prompt.substring(0, Math.min(prompt.length(), 200)));
+
         // Build request body (remains the same)
         Map<String, Object> requestBody = new HashMap<>();
         Map<String, Object> generationConfig = new HashMap<>();
@@ -132,7 +138,9 @@ public class ImpactAnalyzer {
         generationConfig.put("responseMimeType", "application/json");
         try {
             generationConfig.put("responseSchema", mapper.readValue(IMPACT_REPORT_SCHEMA, Map.class));
+            log.debug("Successfully loaded IMPACT_REPORT_SCHEMA into generationConfig.");
         } catch (IOException e) {
+            log.error("Failed to map IMPACT_REPORT_SCHEMA for request payload.", e);
             return CompletableFuture.failedFuture(e); // Handle IO exception during schema read
         }
         requestBody.put("generationConfig", generationConfig);
@@ -143,6 +151,7 @@ public class ImpactAnalyzer {
         content.put("parts", List.of(part));
         requestBody.put("contents", List.of(content));
 
+        log.info("Starting LLM analysis for target method: {} (Diff size: {} bytes)", targetMethodSignature, changedModuleDiff.length());
 
         // --- ASYNCHRONOUS WEBCLIENT CALL ---
 
@@ -152,6 +161,15 @@ public class ImpactAnalyzer {
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(requestBody)
                 .retrieve()
+                .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(), response -> {
+                    // Custom error handling for HTTP status codes
+                    return response.bodyToMono(String.class)
+                            .flatMap(body -> {
+                                String errorMsg = String.format("LLM API returned HTTP %d. Response: %s", response.statusCode().value(), body.substring(0, Math.min(body.length(), 200)));
+                                log.error("LLM API HTTP Error: {}", errorMsg);
+                                return Mono.error(new RuntimeException(errorMsg));
+                            });
+                })
                 // 2. Specify the expected response type (Map)
                 .bodyToMono(Map.class);
 
@@ -162,24 +180,43 @@ public class ImpactAnalyzer {
                     try {
                         @SuppressWarnings("unchecked")
                         List<Map<String, Object>> candidates = (List<Map<String, Object>>) response.get("candidates");
+
+                        if (candidates == null || candidates.isEmpty()) {
+                            log.error("LLM response contained no candidates: {}", response);
+                            throw new IllegalStateException("LLM response empty or malformed.");
+                        }
+
                         @SuppressWarnings("unchecked")
                         Map<String, Object> contentResponse = (Map<String, Object>) candidates.get(0).get("content");
                         @SuppressWarnings("unchecked")
                         List<Map<String, Object>> parts = (List<Map<String, Object>>) contentResponse.get("parts");
                         String jsonOutput = (String) parts.get(0).get("text");
 
-                        System.out.print(jsonOutput); // Debugging
+                        log.debug("Raw JSON output received from LLM:\n{}", jsonOutput);
 
-                        return mapper.readValue(cleanJsonResponse(jsonOutput), ImpactReport.class);
+                        String cleanJson = cleanJsonResponse(jsonOutput);
+                        log.debug("Clean JSON output mapped to ImpactReport.");
+
+                        return mapper.readValue(cleanJson, ImpactReport.class);
                     } catch (Exception e) {
+                        log.error("Failed to process or map LLM response to ImpactReport DTO.", e);
                         throw new RuntimeException("Failed to process LLM response", e);
                     }
+                })
+                .exceptionally(e -> {
+                    if (e.getCause() instanceof WebClientResponseException) {
+                        // Exception already logged by onStatus handler
+                        throw new RuntimeException("LLM API call failed.", e.getCause());
+                    }
+                    log.error("Unhandled error during LLM analysis execution.", e);
+                    throw new RuntimeException("Unhandled error during LLM analysis.", e);
                 });
     }
 
     // --- Utility Methods (same as original, but updated line separators) ---
 
     private String cleanJsonResponse(String jsonOutput) {
+        // ... (Logic unchanged) ...
         jsonOutput = jsonOutput.trim();
         if (jsonOutput.startsWith("```json")) {
             jsonOutput = jsonOutput.substring(7).trim();
@@ -189,11 +226,13 @@ public class ImpactAnalyzer {
         if (jsonOutput.endsWith("```")) {
             jsonOutput = jsonOutput.substring(0, jsonOutput.length() - 3).trim();
         }
+        log.trace("Cleaned JSON response length: {}", jsonOutput.length());
         return jsonOutput.trim();
     }
 
     private String extractContextualCode(Map<String, CompilationUnit> relevantContextASTs, String targetMethodSignature) {
-        return relevantContextASTs.entrySet().stream()
+        // ... (Logic unchanged) ...
+        String result = relevantContextASTs.entrySet().stream()
                 .map(entry -> {
                     String moduleName = entry.getKey();
                     CompilationUnit cu = entry.getValue();
@@ -205,11 +244,13 @@ public class ImpactAnalyzer {
                     return snippets;
                 })
                 .collect(Collectors.joining(NL + NL));
+        log.debug("Extracted {} bytes of contextual code snippets.", result.length());
+        return result;
     }
 
-    // --- The Core Prompt Generation Method ---
+    // --- The Core Prompt Generation Method (Unchanged) ---
     public String generateCoTPromptWithSchema(String moduleADiff, String contextualModules) {
-
+        // ... (Logic unchanged) ...
         final String NL = "\n";
 
         StringBuilder prompt = new StringBuilder();
