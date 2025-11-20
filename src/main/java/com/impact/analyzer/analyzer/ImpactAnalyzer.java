@@ -1,19 +1,17 @@
 package com.impact.analyzer.analyzer;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.impact.analyzer.api.model.ImpactReport;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import lombok.extern.slf4j.Slf4j; // SLF4J logging import
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.client.WebClientResponseException; // Needed for robust error logging
+import org.springframework.web.client.RestTemplate;
 import reactor.core.publisher.Mono;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +21,7 @@ import java.util.stream.Collectors;
 @Component
 @Slf4j
 public class ImpactAnalyzer {
+
 
     // Use System.lineSeparator() for cross-platform compatibility
     private static final String NL = System.lineSeparator();
@@ -108,7 +107,7 @@ public class ImpactAnalyzer {
     private final ObjectMapper mapper = new ObjectMapper();
     private final String apiKey;
     private final WebClient webClient;
-    private final RestTemplate restTemplate = new RestTemplate(); // Field retained as requested
+    private final RestTemplate restTemplate = new RestTemplate();
     // Using a more stable model for complex reasoning
     private static final String API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
@@ -161,15 +160,6 @@ public class ImpactAnalyzer {
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(requestBody)
                 .retrieve()
-                .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(), response -> {
-                    // Custom error handling for HTTP status codes
-                    return response.bodyToMono(String.class)
-                            .flatMap(body -> {
-                                String errorMsg = String.format("LLM API returned HTTP %d. Response: %s", response.statusCode().value(), body.substring(0, Math.min(body.length(), 200)));
-                                log.error("LLM API HTTP Error: {}", errorMsg);
-                                return Mono.error(new RuntimeException(errorMsg));
-                            });
-                })
                 // 2. Specify the expected response type (Map)
                 .bodyToMono(Map.class);
 
@@ -180,12 +170,6 @@ public class ImpactAnalyzer {
                     try {
                         @SuppressWarnings("unchecked")
                         List<Map<String, Object>> candidates = (List<Map<String, Object>>) response.get("candidates");
-
-                        if (candidates == null || candidates.isEmpty()) {
-                            log.error("LLM response contained no candidates: {}", response);
-                            throw new IllegalStateException("LLM response empty or malformed.");
-                        }
-
                         @SuppressWarnings("unchecked")
                         Map<String, Object> contentResponse = (Map<String, Object>) candidates.get(0).get("content");
                         @SuppressWarnings("unchecked")
@@ -194,29 +178,16 @@ public class ImpactAnalyzer {
 
                         log.debug("Raw JSON output received from LLM:\n{}", jsonOutput);
 
-                        String cleanJson = cleanJsonResponse(jsonOutput);
-                        log.debug("Clean JSON output mapped to ImpactReport.");
-
-                        return mapper.readValue(cleanJson, ImpactReport.class);
+                        return mapper.readValue(cleanJsonResponse(jsonOutput), ImpactReport.class);
                     } catch (Exception e) {
-                        log.error("Failed to process or map LLM response to ImpactReport DTO.", e);
                         throw new RuntimeException("Failed to process LLM response", e);
                     }
-                })
-                .exceptionally(e -> {
-                    if (e.getCause() instanceof WebClientResponseException) {
-                        // Exception already logged by onStatus handler
-                        throw new RuntimeException("LLM API call failed.", e.getCause());
-                    }
-                    log.error("Unhandled error during LLM analysis execution.", e);
-                    throw new RuntimeException("Unhandled error during LLM analysis.", e);
                 });
     }
 
     // --- Utility Methods (same as original, but updated line separators) ---
 
     private String cleanJsonResponse(String jsonOutput) {
-        // ... (Logic unchanged) ...
         jsonOutput = jsonOutput.trim();
         if (jsonOutput.startsWith("```json")) {
             jsonOutput = jsonOutput.substring(7).trim();
@@ -248,9 +219,9 @@ public class ImpactAnalyzer {
         return result;
     }
 
-    // --- The Core Prompt Generation Method (Unchanged) ---
+    // --- The Core Prompt Generation Method ---
     public String generateCoTPromptWithSchema(String moduleADiff, String contextualModules) {
-        // ... (Logic unchanged) ...
+
         final String NL = "\n";
 
         StringBuilder prompt = new StringBuilder();
