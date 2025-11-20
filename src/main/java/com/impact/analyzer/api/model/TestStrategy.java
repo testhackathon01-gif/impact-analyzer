@@ -9,5 +9,4 @@ public class TestStrategy {
     public String scope;
     public String priority;
     public List<TestCaseRequired> testCasesRequired;
-
 }
