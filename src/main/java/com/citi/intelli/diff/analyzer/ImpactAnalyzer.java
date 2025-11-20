@@ -171,7 +171,7 @@ public class ImpactAnalyzer {
                         List<Map<String, Object>> parts = (List<Map<String, Object>>) contentResponse.get("parts");
                         String jsonOutput = (String) parts.get(0).get("text");
 
-                        // System.out.print(jsonOutput); // Debugging
+                        System.out.print(jsonOutput); // Debugging
 
                         return mapper.readValue(cleanJsonResponse(jsonOutput), ImpactReport.class);
                     } catch (Exception e) {

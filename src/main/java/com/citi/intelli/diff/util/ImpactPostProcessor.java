@@ -25,60 +25,86 @@ public class ImpactPostProcessor {
     /**
      * Helper method to process a single AggregatedChangeReport.
      */
+    // Inside ImpactPostProcessor.java
+
     private static ConciseAnalysisReport toConciseReport(AggregatedChangeReport aggReport, String changedFileFQN) {
 
-        // --- 1. PRE-PROCESSING & IMPACT MAPPING ---
+        // 1. Process Impacts (required for strategy extraction)
         List<ActionableImpact> conciseImpacts = aggReport.llmReport.getImpactedModules().stream()
                 .map(module -> toActionableImpact(module, changedFileFQN))
                 .collect(Collectors.toList());
 
         ConciseAnalysisReport conciseReport = new ConciseAnalysisReport();
 
+        // ... (Naming Logic to set finalChangedMemberName - REMAINS THE SAME) ...
         String memberName = aggReport.changedMethod;
         String simpleClassName = getSimpleClassName(changedFileFQN);
-        String summaryReasoning = summarizeReasoning(aggReport.llmReport.getReasoning());
-
-        // Logic to set finalChangedMemberName (Handle Module A/FQN placeholders)
         String finalChangedMemberName;
-        if ("unknownMethod".equals(memberName) ||
-                "unknownMember".equals(memberName) ||
-                "Module A".equals(memberName) ||
-                simpleClassName.equals(memberName)) {
+        if ("unknownMethod".equals(memberName) || "unknownMember".equals(memberName) || "Module A".equals(memberName) || simpleClassName.equals(memberName)) {
             finalChangedMemberName = changedFileFQN;
         } else {
             finalChangedMemberName = memberName;
         }
 
-        // --- 2. SET CORE FIELDS ---
-        int riskScore = aggReport.llmReport.getRiskScore();
-
+        // 2. SET CORE FIELDS
         conciseReport.changedMember = finalChangedMemberName;
-        conciseReport.riskScore = riskScore;
-        conciseReport.summaryReasoning = summaryReasoning;
+        conciseReport.riskScore = aggReport.llmReport.getRiskScore();
+        conciseReport.summaryReasoning = summarizeReasoning(aggReport.llmReport.getReasoning());
         conciseReport.memberType = deduceMemberType(finalChangedMemberName, changedFileFQN, conciseReport.summaryReasoning);
 
 
-        // --- 3. SET TEST STRATEGY (FIXED LOGIC) ---
+        // 3. --- SIMPLIFIED TEST STRATEGY ASSIGNMENT ---
+        // Now that the schema enforces the field, we rely on the LLM's direct DTO output.
+        // The responsibility shifts from extraction to validation (if needed), but for now, we trust the DTO.
+
+        // We retain the LLM's object directly. If the LLM somehow fails to populate it despite the schema,
+        // this will be null, which is correct, though the LLM is expected to return an empty TestStrategy object.
         TestStrategy llmStrategy = aggReport.llmReport.getTestStrategy();
 
         if (llmStrategy != null) {
-            // A. PRIORITIZE: If the LLM successfully created the object, use it.
             conciseReport.testStrategy = llmStrategy;
         } else {
-            // B. FALLBACK: If the LLM returned null, manually extract/generate the strategy from the reasoning.
-            conciseReport.testStrategy = extractTestStrategyFromReasoning(
-                    aggReport.llmReport.getReasoning(),
-                    conciseImpacts,
-                    riskScore // Pass the risk score for priority mapping
-            );
+            // Fallback for extreme failure case where DTO is null despite schema enforcement
+            // We create a minimal fallback strategy to avoid NulLPointerExceptions in downstream code.
+            conciseReport.testStrategy = createMinimalFallbackStrategy(conciseImpacts, conciseReport.riskScore);
         }
+        // ----------------------------------------------------
 
-        // --- 4. FINAL ASSIGNMENT ---
+        // 4. Final Assignment
         conciseReport.actionableImpacts = conciseImpacts;
 
         return conciseReport;
     }
 
+    // Inside ImpactPostProcessor.java (Add this new method)
+
+    /**
+     * Creates a minimal strategy if the LLM's testStrategy object is null.
+     * This replaces the previous, more complex manual extraction.
+     */
+    private static TestStrategy createMinimalFallbackStrategy(List<ActionableImpact> impacts, int riskScore) {
+        TestStrategy strategy = new TestStrategy();
+        strategy.scope = "Test strategy was missing from LLM output. Auto-generated minimal regression scope.";
+
+        if (riskScore >= 8) {
+            strategy.priority = "HIGH";
+        } else if (riskScore >= 5) {
+            strategy.priority = "MEDIUM";
+        } else {
+            strategy.priority = "LOW";
+        }
+
+        strategy.testCasesRequired = impacts.stream()
+                .map(i -> {
+                    TestCaseRequired tc = new TestCaseRequired();
+                    tc.moduleName = i.moduleName;
+                    tc.testType = "Integration Test"; // Generic default
+                    tc.focus = "Validate the fix related to: " + i.issue;
+                    return tc;
+                })
+                .collect(Collectors.toList());
+        return strategy;
+    }
     /**
      * Extracts the Test Strategy from the verbose 'reasoning' field and constructs the TestStrategy DTO.
      */
@@ -211,34 +237,61 @@ public class ImpactPostProcessor {
         return fqn.substring(lastDotIndex + 1);
     }
 
+    // Inside ImpactPostProcessor.java
+
+    /**
+     * Extracts a concise summary from the LLM's verbose Chain of Thought reasoning.
+     * Focuses on the content of the first step (Analyze Contractual Change).
+     */
     private static String summarizeReasoning(String fullReasoning) {
-        // ... (summarizeReasoning implementation remains the same) ...
         if (fullReasoning == null || fullReasoning.trim().isEmpty()) {
             return "No detailed reasoning available.";
         }
-        String upperReasoning = fullReasoning.toUpperCase();
-        int searchStart = upperReasoning.indexOf("1. ANALYZE CONTRACTUAL CHANGE");
+
+        // 1. Locate the start of the "1. Analyze Contractual Change" step (robust search)
+        int searchStart = fullReasoning.toUpperCase().indexOf("1. ANALYZE CONTRACTUAL CHANGE");
         int startIndex = (searchStart != -1) ? searchStart : 0;
-        int endIndex = upperReasoning.indexOf("2. TRACE SYNTACTIC DEPENDENCIES", startIndex);
-        String summary;
+
+        // 2. Find the end of the analysis step (where step 2 begins)
+        int endIndex = fullReasoning.toUpperCase().indexOf("2. TRACE SYNTACTIC DEPENDENCIES", startIndex);
+
+        String summaryBlock;
         if (endIndex != -1) {
-            summary = fullReasoning.substring(startIndex, endIndex);
+            summaryBlock = fullReasoning.substring(startIndex, endIndex);
         } else {
-            summary = fullReasoning.substring(startIndex);
+            summaryBlock = fullReasoning.substring(startIndex);
         }
-        summary = summary.replaceAll("(?i)1\\. ANALYZE CONTRACTUAL CHANGE IN MODULE A:", "")
+
+        // 3. Clean up the output: Remove step header case-insensitively
+        String summary = summaryBlock.replaceAll("(?i)1\\. ANALYZE CONTRACTUAL CHANGE IN MODULE A:", "")
                 .replace("\n", " ").trim();
+
+        // 4. Limit to the first coherent sentence.
+        // Find the first period followed by a space or the end of the string.
         int firstPeriod = summary.indexOf(". ");
+
         if (firstPeriod > 0) {
+            // Find the end of the second sentence for cases where the first sentence is short/introductory.
+            // We ensure we don't accidentally cut off the core change description.
             int secondPeriod = summary.indexOf(". ", firstPeriod + 2);
-            if (secondPeriod > 0) {
+
+            // If the entire summary is short, return it all.
+            if (summary.length() < 100) {
+                return summary;
+            }
+
+            // Return up to the end of the second sentence if it exists and is not excessively long.
+            if (secondPeriod > 0 && secondPeriod < firstPeriod + 100) {
                 return summary.substring(0, secondPeriod + 1).trim();
             }
+
+            // Otherwise, return just the first clear sentence.
             return summary.substring(0, firstPeriod + 1).trim();
         }
+
+        // Fallback: If no clear period-space separator is found, return the trimmed block.
         return summary;
     }
-
     private static ActionableImpact toActionableImpact(ImpactedModule module, String changedFileFQN) {
         ActionableImpact impact = new ActionableImpact();
         String simpleClassName = getSimpleClassName(changedFileFQN);
