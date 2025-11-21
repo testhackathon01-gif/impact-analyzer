@@ -62,7 +62,7 @@ public final class ImpactPostProcessor {
 
         conciseReport.changedMember = finalChangedMemberName;
         conciseReport.riskScore = aggReport.llmReport.getRiskScore();
-        conciseReport.summaryReasoning = summarizeReasoning(aggReport.llmReport.getReasoning());
+        conciseReport.summaryReasoning = summarizeReasoning(aggReport.llmReport.getReasoning(), changedFileFQN);
         // Deduce type based on normalized name and summary
         conciseReport.memberType = deduceMemberType(finalChangedMemberName, changedFileFQN, conciseReport.summaryReasoning);
 
@@ -99,11 +99,17 @@ public final class ImpactPostProcessor {
     /**
      * Extracts a concise summary from the LLM's verbose Chain of Thought reasoning.
      */
-    private static String summarizeReasoning(String fullReasoning) {
+    private static String summarizeReasoning(String fullReasoning, String changedFileFQN) {
         if (fullReasoning == null || fullReasoning.trim().isEmpty()) {
             return "No detailed reasoning available.";
         }
 
+        //String summaryBlock = fullReasoning;
+        // --- 1. Substitute "Module A" placeholders with the FQCN ---
+        // This handles cases where "Module A" appears anywhere in the raw reasoning text,
+        // ensuring the text is accurate before truncation.
+        fullReasoning = fullReasoning.replaceAll("(?i)Module A", changedFileFQN);
+        fullReasoning = fullReasoning.replaceAll("(?i)ModuleA", changedFileFQN);
         // 1. Locate the start of the "1. Analyze Contractual Change" step
         int searchStart = fullReasoning.toUpperCase().indexOf("1. ANALYZE CONTRACTUAL CHANGE");
         int startIndex = (searchStart != -1) ? searchStart : 0;
@@ -119,7 +125,8 @@ public final class ImpactPostProcessor {
         }
 
         // 3. Clean up the output: Remove step header case-insensitively
-        String summary = summaryBlock.replaceAll("(?i)1\\. ANALYZE CONTRACTUAL CHANGE IN MODULE A:", "")
+        String summary = summaryBlock
+                .replaceAll("(?i)1\\. ANALYZE CONTRACTUAL CHANGE IN " + changedFileFQN + ":", "")
                 .replace("\n", " ").trim();
 
         // 4. Limit to the first one or two coherent sentences.
