@@ -49,7 +49,7 @@ The analysis pipeline follows a 5-step workflow:
 1.  **Clone the Repository:**
     ```bash
     git clone https://github.com/testhackathon01-gif/impact-analyzer.git
-    cd impact-analyzer-api
+    cd impact-analyzer
     ```
 
 2.  **Build the Project:**
@@ -68,15 +68,13 @@ The analysis pipeline follows a 5-step workflow:
 
 The application will start on the default port **`8080`**.
 
----
+### Repository for UI
+https://github.com/testhackathon01-gif/impact-analyzer-gui.git ( Follow README.md of this repo to setup UI)
 
-## 📂 Project Structure for Testing
+### Test Repos
 
-To run the analysis successfully, you must create a local directory structure simulating the two Git commits (Baseline and Target).
-
-### Local Test Directory Setup
-
-Create a git repo/or use public repos where we need to look for impact for your test data (e.g., `mock_test_repo`). 
+Repos for which user has access will be directly fetched and displayed in UI to check impact of modified code. 
+Username has to be set in GitHubRepoService.java in cachePublicRepos() method.
 
 ---
 
