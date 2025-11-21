@@ -107,33 +107,43 @@ The core functionality is exposed through a single POST endpoint.
 
 **Example Request Payload:**
 
-```json
 {
-    "selectedRepository": "https://github.com/testhackathon01-gif/order-purchase",
-    "compareRepositoryUrls": [
-        "https://github.com/testhackathon01-gif/order-purchase"
-    ],
-    "localFilePath": "C:/Users/DELL/Downloads/order-purchase/src/main/java/",
-    "targetFilename": "PricingUtility.java"
+  "selectedRepository": "https://github.com/testhackathon01-gif/order-purchase",
+  "compareRepositoryUrls": [
+    "https://github.com/testhackathon01-gif/order-purchase",
+    "https://github.com/testhackathon01-gif/consumer-service"
+  ],
+  "targetFilename": "PricingUtility.java",
+  "changedCode": "package com.app.finance;\n\nimport java.math.BigDecimal;\nimport java.math.RoundingMode;\n\npublic class PricingUtility {\n\tprivate static final double TAX_RATE = 0.05; // 5% tax\n\n\t// 1. ORIGINAL: Returns double.\n\tpublic BigDecimal calculateDiscount(double price, double percentage) {\n\t\tBigDecimal discount = BigDecimal.valueOf(price)\n\t\t\t\t.multiply(BigDecimal.valueOf(percentage))\n\t\t\t\t.divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);\n\t\treturn discount;\n\t}\n\t// 2. ORIGINAL: Simple tax rate getter.\n\tpublic double getTaxRate() {\n\t\treturn TAX_RATE;\n\t}\n\n\t// 3. DEAD CODE: This method is never called by dependents.\n\tpublic String getProductCodePrefix() {\n\t\treturn \"PRD_V1_\";\n\t}\n}"
 }
 
+**Response : **
 [
-    {
-        "changedMethod": "getTimestamp",
-        "llmReport": {
-            "riskScore": 8,
-            "reasoning": "Dummy reasoning for getTimestamp change.",
-            "impactedModules": [
-                {
-                    "moduleName": "com.app.modulea.DataGenerator",
-                    "impactType": "SYNTACTIC_BREAK",
-                    "description": "Return type mismatch."
-                }
-            ]
+  {
+    "changedMember": "calculateDiscount",
+    "memberType": "METHOD",
+    "riskScore": 8,
+    "summaryReasoning": "Step 1: Analyze Contractual Change in Module A",
+    "testStrategy": {
+      "scope": "Modules requiring syntactic fixes, semantic validation for precision, and runtime null-safety validation for BigDecimal type changes. Additionally, the core utility method's new BigDecimal logic must be thoroughly tested.",
+      "priority": "HIGH",
+      "testCasesRequired": [
+        {
+          "moduleName": "com.app.order.OrderProcessor",
+          "testType": "Integration Test",
+          "focus": "Verify `calculateDiscount` integration, ensuring correct `BigDecimal` handling and precision preservation after fixing the syntactic break. Test various order totals and discount percentages."
         }
-    }
-]
+    ]
+},
+    "actionableImpacts": [
+      {
+        "moduleName": "com.app.order.OrderProcessor",
+        "impactType": "SYNTACTIC_BREAK",
+        "issue": "The `calculateDiscount` method now returns `BigDecimal` instead of `double`."
+      }
+    ]
+}
+
 
 curl -X POST http://localhost:8080/api/v1/impact/analyze \
 -H 'Content-Type: application/json' \
--d '{"repositoryUrls": [], "localFilePath": "/path/to/your/mock_test_repo", "targetFilename": "A_Helper.java"}'
