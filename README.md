@@ -30,10 +30,16 @@ These instructions will get you a copy of the project up and running on your loc
 The analysis pipeline follows a 5-step workflow:
 
 **Input**: Accepts Baseline and Target source code files.
+
 **Parsing**: Converts raw source code into manipulatable Abstract Syntax Trees (AST).
+
 **Diff Engine**: Identifies semantic and structural differences.
+
 **Intelligence Layer**: LLM integration provides reasoning and calculates risk scores.
+
 **Output**: Generates the final impact analysis report.
+
+<img width="1011" height="274" alt="image" src="https://github.com/user-attachments/assets/7201bfda-9279-48fb-9c59-c5332c2981f6" />
 
 
 ### Installation
