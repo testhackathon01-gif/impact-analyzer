@@ -39,8 +39,6 @@ The analysis pipeline follows a 5-step workflow:
 
 **Output**: Generates the final impact analysis report.
 
-<img width="1011" height="274" alt="image" src="https://github.com/user-attachments/assets/7201bfda-9279-48fb-9c59-c5332c2981f6" />
-
 
 ### Installation
 
@@ -59,7 +57,7 @@ The analysis pipeline follows a 5-step workflow:
 3.  **Run the Application:**
     Execute the built JAR file.
     ```bash
-    java -jar build/libs/IntelliDiffApplication.jar
+    java -jar build/libs/Impact-Analyzer.jar
     # OR using the Spring Boot Gradle Plugin:
     ./gradlew bootRun
     ```
@@ -74,9 +72,7 @@ To run the analysis successfully, you must create a local directory structure si
 
 ### Local Test Directory Setup
 
-Create a base directory for your test data (e.g., `mock_test_repo`). Inside it, create two sub-folders:
-
-You will pass the path to `mock_test_repo` as the `localFilePath` in your API request.
+Create a git repo/or use public repos where we need to look for impact for your test data (e.g., `mock_test_repo`). 
 
 ---
 
