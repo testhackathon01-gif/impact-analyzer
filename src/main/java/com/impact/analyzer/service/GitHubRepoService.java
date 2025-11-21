@@ -75,7 +75,7 @@ public class GitHubRepoService {
                 HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
                 List<String> pageUrls = processResponse(response);
-
+                pageUrls.remove("https://github.com/testhackathon01-gif/impact-analyzer-gui");
                 repoList.addAll(pageUrls);
 
                 if (pageUrls.size() < REPOS_PER_PAGE) {
