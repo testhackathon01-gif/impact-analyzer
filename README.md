@@ -13,10 +13,10 @@ These instructions will get you a copy of the project up and running on your loc
 ### Prerequisites
 
 * **Java Development Kit (JDK) 17+**
-* **Gradle** (or similar build tool used in your project setup)(version)
+* **Gradle** (8.14.3)
 * **Spring Boot** (Tested with Spring Boot 3+)
 * **Angular TS** (Node 24.11.0)
-* **Gemini** (Version)
+* **Gemini vertex AI**
 
 ### Key Features
 
@@ -25,7 +25,9 @@ These instructions will get you a copy of the project up and running on your loc
 * **AI-Powered Risk Scoring**: Integrates with LLM - Gemini vertex AI to assign a quantitative risk score (1-10) to changes based on severity (e.g., Breaking API change vs. Internal logic update).
 * **Reasoning Engine**: Translates technical diffs into human-readable explanations, detailing why a specific change is considered risky.
 * **Impact Localization**: Identifies exactly which downstream modules and specific classes will be affected by a proposed modification.
-* **JSON Reporting**: Outputs a comprehensive JSON report with actionable insights for CI/CD integration.
+* **JSON Reporting**:Detailed report generation with all possible impacts/test strategies/risk scoring. Different types of report can be generated satisfying user needs. like HTML/Excel/JSON report
+* **Test Strategy** : Provides detailed test strategies on how the change has to be validated.    
+
 
 ### Architecture
 
