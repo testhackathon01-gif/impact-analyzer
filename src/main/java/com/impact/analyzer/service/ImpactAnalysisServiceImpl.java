@@ -4,7 +4,6 @@ import com.impact.analyzer.analyzer.JGitSourceCodeManager; // Renamed dependency
 import com.impact.analyzer.api.model.AggregatedChangeReport;
 import com.impact.analyzer.util.AnalysisOrchestrator;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
