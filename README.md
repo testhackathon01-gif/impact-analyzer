@@ -13,9 +13,10 @@ These instructions will get you a copy of the project up and running on your loc
 ### Prerequisites
 
 * **Java Development Kit (JDK) 17+**
-* **Gradle** (or similar build tool used in your project setup)
+* **Gradle** (or similar build tool used in your project setup)(version)
 * **Spring Boot** (Tested with Spring Boot 3+)
 * **Angular TS** (Node 24.11.0)
+* **Gemini** (Version)
 
 ### Key Features
 
