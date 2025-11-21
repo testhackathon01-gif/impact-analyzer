@@ -1,4 +1,4 @@
-# 💥 Impact Analyzer REST API
+# 💥 Impact Analyzer API
 
 An intelligent service designed to automatically analyze structural and semantic changes between two versions of Java source code (Baseline vs. Target) and determine the downstream impact on dependent modules.
 
@@ -15,6 +15,26 @@ These instructions will get you a copy of the project up and running on your loc
 * **Java Development Kit (JDK) 17+**
 * **Gradle** (or similar build tool used in your project setup)
 * **Spring Boot** (Tested with Spring Boot 3+)
+
+### Key Features
+
+* **Semantic Analysis**: Utilizes JavaParser to generate Abstract Syntax Trees (ASTs), allowing the system to understand code logic rather than just syntax. It intelligently ignores non-functional changes like whitespace or formatting.
+* **Semantic Diffing**: Detects structural differences in methods, fields, and signatures.
+* **AI-Powered Risk Scoring**: Integrates with LLM - Gemini vertex AI to assign a quantitative risk score (1-10) to changes based on severity (e.g., Breaking API change vs. Internal logic update).
+* **Reasoning Engine**: Translates technical diffs into human-readable explanations, detailing why a specific change is considered risky.
+* **Impact Localization**: Identifies exactly which downstream modules and specific classes will be affected by a proposed modification.
+* **JSON Reporting**: Outputs a comprehensive JSON report with actionable insights for CI/CD integration.
+
+### Architecture
+
+The analysis pipeline follows a 5-step workflow:
+
+**Input**: Accepts Baseline and Target source code files.
+**Parsing**: Converts raw source code into manipulatable Abstract Syntax Trees (AST).
+**Diff Engine**: Identifies semantic and structural differences.
+**Intelligence Layer**: LLM integration provides reasoning and calculates risk scores.
+**Output**: Generates the final impact analysis report.
+
 
 ### Installation
 
