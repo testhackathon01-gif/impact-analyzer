@@ -26,7 +26,7 @@ public class ImpactAnalyzerController { // 💡 Renaming convention maintained
 
     private static final int MAX_NAME_LENGTH = 255;
     private static final Pattern SAFE_FQCN_OR_NAME = Pattern.compile("^[A-Za-z0-9_$.()-]+(\\.java)?$");
-    private static final Pattern SAFE_FILENAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_\\-\\.]+$");
+    private static final Pattern SAFE_JAVA_FILE = Pattern.compile("^[A-Za-z0-9_$.-]+\\.java$");
     private final ImpactAnalysisService analyzerService;
 
     // Constructor Injection is correctly used
@@ -40,17 +40,7 @@ public class ImpactAnalyzerController { // 💡 Renaming convention maintained
      * API Endpoint to trigger the code impact analysis.
      * URL: POST /api/v1/impact/analyze
      */
-    private boolean isSafeTargetFilename(String filename) {
-        if (filename == null || filename.isBlank()) {
-            return false;
-        }
-        // 1. Block directory traversal sequences explicitly
-        if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
-            return false;
-        }
-        // 2. Enforce allowed characters (avoids many encoded traversal attempts)
-        return SAFE_FILENAME_PATTERN.matcher(filename).matches();
-    }
+
     @PostMapping(value = "/analyze", consumes = "application/json")
     public ResponseEntity<List<ConciseAnalysisReport>> analyze(@RequestBody AnalysisRequest request) {
 
@@ -101,6 +91,15 @@ public class ImpactAnalyzerController { // 💡 Renaming convention maintained
             log.error("Analysis failed due to internal server error.", e);
             return ResponseEntity.internalServerError().build();
         }
+    }
+
+    // --- Input Validation Helpers ---
+    private static boolean isSafeTargetFilename(String name) {
+        if (name == null) return false;
+        String trimmed = name.trim();
+        if (trimmed.isEmpty() || trimmed.length() > MAX_NAME_LENGTH) return false;
+        if (trimmed.contains("..") || trimmed.contains("/") || trimmed.contains("\\")) return false;
+        return SAFE_JAVA_FILE.matcher(trimmed).matches();
     }
     // --- 2. METADATA ENDPOINT: REPOSITORIES ---
 
