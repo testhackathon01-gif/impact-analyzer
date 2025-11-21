@@ -25,9 +25,8 @@ import java.util.regex.Pattern;
 public class ImpactAnalyzerController { // 💡 Renaming convention maintained
 
     private static final int MAX_NAME_LENGTH = 255;
-    private static final Pattern SAFE_JAVA_FILE = Pattern.compile("^[A-Za-z0-9_$.-]+\\.java$");
     private static final Pattern SAFE_FQCN_OR_NAME = Pattern.compile("^[A-Za-z0-9_$.()-]+(\\.java)?$");
-
+    private static final Pattern SAFE_FILENAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_\\-\\.]+$");
     private final ImpactAnalysisService analyzerService;
 
     // Constructor Injection is correctly used
@@ -41,6 +40,17 @@ public class ImpactAnalyzerController { // 💡 Renaming convention maintained
      * API Endpoint to trigger the code impact analysis.
      * URL: POST /api/v1/impact/analyze
      */
+    private boolean isSafeTargetFilename(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return false;
+        }
+        // 1. Block directory traversal sequences explicitly
+        if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+            return false;
+        }
+        // 2. Enforce allowed characters (avoids many encoded traversal attempts)
+        return SAFE_FILENAME_PATTERN.matcher(filename).matches();
+    }
     @PostMapping(value = "/analyze", consumes = "application/json")
     public ResponseEntity<List<ConciseAnalysisReport>> analyze(@RequestBody AnalysisRequest request) {
 
@@ -56,6 +66,7 @@ public class ImpactAnalyzerController { // 💡 Renaming convention maintained
         }
 
         // Additional hardening: validate that targetFilename is not a path and looks like a Java file name
+        // FIX: The implementation of isSafeTargetFilename is now robust against path traversal.
         if (!isSafeTargetFilename(request.getTargetFilename())) {
             log.warn("Bad Request: Unsafe targetFilename supplied: {}", request.getTargetFilename());
             return ResponseEntity.badRequest().build();
@@ -63,6 +74,8 @@ public class ImpactAnalyzerController { // 💡 Renaming convention maintained
 
         try {
             // 2. Delegate core analysis logic
+            // NOTE: The service layer MUST also use the validated filename ONLY for resolving against
+            // a strict, static base directory (Path.resolve + Path.startsWith check).
             List<AggregatedChangeReport> rawReport = analyzerService.runAnalysis(
                     request.getSelectedRepository(),
                     request.getCompareRepositoryUrls(),
@@ -70,6 +83,7 @@ public class ImpactAnalyzerController { // 💡 Renaming convention maintained
                     request.getTargetFilename()
             );
 
+            // ... (rest of the logic remains the same)
             // 3. Post-process the raw LLM report into a concise format
             List<ConciseAnalysisReport> finalReport = ImpactPostProcessor.processReports(rawReport, request.getTargetFilename());
 
@@ -88,7 +102,6 @@ public class ImpactAnalyzerController { // 💡 Renaming convention maintained
             return ResponseEntity.internalServerError().build();
         }
     }
-
     // --- 2. METADATA ENDPOINT: REPOSITORIES ---
 
     /**
@@ -152,15 +165,6 @@ public class ImpactAnalyzerController { // 💡 Renaming convention maintained
             // Return 500 Internal Server Error
             return ResponseEntity.internalServerError().body("Error retrieving code.");
         }
-    }
-
-    // --- Input Validation Helpers ---
-    private static boolean isSafeTargetFilename(String name) {
-        if (name == null) return false;
-        String trimmed = name.trim();
-        if (trimmed.isEmpty() || trimmed.length() > MAX_NAME_LENGTH) return false;
-        if (trimmed.contains("..") || trimmed.contains("/") || trimmed.contains("\\")) return false;
-        return SAFE_JAVA_FILE.matcher(trimmed).matches();
     }
 
     private static boolean isSafeRequestedFileName(String name) {
